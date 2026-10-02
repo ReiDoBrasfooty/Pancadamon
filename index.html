@@ -91,6 +91,9 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #big{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-family:var(--display);font-size:clamp(56px,14vw,120px);color:#fff;-webkit-text-stroke:4px #2a2140;paint-order:stroke fill;pointer-events:none;text-shadow:0 6px 0 #2a2140}
 .tag{position:fixed;left:0;top:0;padding:2px 8px;border-radius:999px;background:var(--panel);color:var(--ink);border:3px solid var(--line);font-weight:800;font-size:12px;white-space:nowrap;pointer-events:none}
 #prompt{cursor:pointer}
+.bubble{position:fixed;left:0;top:0;max-width:230px;padding:6px 10px;background:var(--panel);color:var(--ink);border:3px solid var(--line);border-radius:14px;font-weight:800;font-size:13px;line-height:1.3;pointer-events:none;box-shadow:0 3px 0 var(--line);text-wrap:pretty}
+#area{position:fixed;left:50%;top:calc(66px + env(safe-area-inset-top,0px));transform:translateX(-50%);font-family:var(--display);font-size:clamp(24px,4.5vw,38px);color:#fff;-webkit-text-stroke:3px #2a2140;paint-order:stroke fill;text-shadow:0 4px 0 #2a2140;pointer-events:none;opacity:0;transition:opacity .5s;white-space:nowrap}
+#area.show{opacity:1}@media (prefers-reduced-motion:reduce){#area{transition:none}}
 #capSel img{width:22px;height:22px;margin:-4px 0}
 .shophead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 .coins{font-family:var(--display);font-size:22px;color:#b8860b;font-variant-numeric:tabular-nums}
@@ -122,6 +125,7 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div id="wild" class="card-ui fcard" hidden></div>
 <div id="me" class="card-ui fcard" hidden></div>
 <div id="big" hidden></div>
+<div id="area"></div>
 <div id="pills" hidden><span class="pill card-ui" id="online" hidden>1 jogador online</span><span class="pill card-ui" id="money">0 moedas</span><span class="pill card-ui" id="capSel">Bolota ×0</span><span class="pill card-ui" id="spec" hidden>Especial pronto</span><button class="pill" id="bagBtn">Mochila (Z)</button><button class="pill" id="teamBtn">Time (Tab)</button></div>
 <div id="prompt" class="card-ui" hidden></div>
 <div id="toasts"></div>
@@ -262,8 +266,8 @@ world.broadphase = new C.SAPBroadphase(world);
 world.solver.iterations = 12;
 world.allowSleep = false;
 const GRAV = 20;
-const G_GROUND = 1, G_STATIC = 2, G_BALL = 4, G_TRAINER = 8, ALL = 0xFFFFFF;
-let slotFree = Array.from({length:19}, (_, i) => i);
+const G_GROUND = 1, G_STATIC = 2, G_BALL = 4, G_TRAINER = 8, ALL = 0x3FFFFFFF;
+let slotFree = Array.from({length:25}, (_, i) => i);
 const groundMat = new C.Material('ground'), bodyMat = new C.Material('body');
 world.addContactMaterial(new C.ContactMaterial(groundMat, bodyMat, {friction:0.5, restitution:0}));
 world.addContactMaterial(new C.ContactMaterial(bodyMat, bodyMat, {friction:0.3, restitution:0.1}));
@@ -371,13 +375,212 @@ const ARENA = {x:-25, z:-2, r:6.5};
 })();
 
 const PATCHES = [
-  {x:11, z:6, r:6, lv:[2,4], pool:['javali','macaco','raposa','canguru']},
-  {x:-13, z:9, r:6, lv:[3,5], pool:['lobo','coruja','javali']},
-  {x:9, z:23, r:7, lv:[5,8], pool:['urso','guepardo','macaco','canguru']},
-  {x:-21, z:-15, r:5.5, lv:[4,6], pool:['raposa','coruja','lobo']},
-  {x:24, z:-14, r:6, lv:[6,9], pool:['rinoceronte','gorila','guepardo','urso']}
+  {x:11, z:6, r:6, lv:[2,4], pool:['javali','macaco','raposa','canguru'], name:'Mato Baixo'},
+  {x:-13, z:9, r:6, lv:[3,5], pool:['lobo','coruja','javali'], name:'Mato da Coruja'},
+  {x:9, z:23, r:7, lv:[5,8], pool:['urso','guepardo','macaco','canguru'], name:'Mato Alto'},
+  {x:-21, z:-15, r:5.5, lv:[4,6], pool:['raposa','coruja','lobo'], name:'Mato Seco'},
+  {x:24, z:-14, r:6, lv:[6,9], pool:['rinoceronte','gorila','guepardo','urso'], name:'Mato Bravo'},
+  {x:29, z:5, r:5, lv:[4,7], pool:['canguru','lobo','raposa','javali'], name:'Mato do Leste'},
+  {x:-29, z:29, r:5, lv:[7,10], pool:['gorila','urso','coruja','guepardo'], name:'Bosque Sombrio'}
 ];
 const POND = {x:-12, z:25, r:4.5};
+
+/* ---------- Lugares do mapa: vila, fazenda, acampamento, lago, bosque ---------- */
+const ZONES = [
+  {name:'Vila Pancada', x:25, z:26, r:10},
+  {name:'Fazenda do Seu Zé', x:-27, z:-29, r:8},
+  {name:'Bosque Sombrio', x:-29, z:29, r:10},
+  {name:'Acampamento', x:12, z:-31, r:6},
+  {name:'Lago Raso', x:POND.x, z:POND.z, r:7},
+  {name:'Arena PvP', x:ARENA.x, z:ARENA.z, r:8.5}
+];
+const fires = [];
+function staticBox(x, y, z, hw, hh, hd){
+  const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(hw, hh, hd)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
+  b.position.set(x, y, z); b.isStatic = true; world.addBody(b);
+}
+const solidRect = (x, z, hw, hd, h=1) => { rects.push({x, z, hw, hd}); staticBox(x, h/2, z, hw, h/2, hd); };
+const solidCircle = (x, z, r, h=1) => { colliders.push({x, z, r}); staticBox(x, h/2, z, r*0.75, h/2, r*0.75); };
+function signTexture(lines){
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#f3dfb0'; g.fillRect(0, 0, 256, 128);
+  g.fillStyle = '#4a2c14'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  lines.forEach((l, i) => { g.font = `${i ? 'bold 24px' : '900 32px'} Nunito, 'Arial Black', sans-serif`; g.fillText(l, 128, 128/(lines.length + 1)*(i + 1)); });
+  return new T.CanvasTexture(cv);
+}
+function sign(x, z, lines){
+  const g = new T.Group(), wood = toon('#8a5a3b');
+  const post = mesh(GY, wood); post.scale.set(0.08, 1.5, 0.08); post.position.y = 0.75; g.add(post);
+  const face = new T.MeshBasicMaterial({map:signTexture(lines)});
+  const board = new T.Mesh(new T.BoxGeometry(1.7, 0.85, 0.08), [wood, wood, wood, wood, face, wood]);
+  board.position.y = 1.4; board.rotation.z = rand(-0.06, 0.06); outline(board, 1.04); g.add(board);
+  g.position.set(x, 0, z); g.rotation.y = Math.PI/4; scene.add(g);
+  colliders.push({x, z, r:0.2});
+}
+function googlyDisc(parent, x, y, z, r, rotY=0){
+  const e = new T.Group(); e.position.set(x, y, z); e.rotation.y = rotY; parent.add(e);
+  const ring = mesh(new T.CircleGeometry(r*1.15, 18), toon('#2a2140'), false); e.add(ring);
+  const w = mesh(new T.CircleGeometry(r, 18), toon('#ffffff'), false); w.position.z = 0.01; e.add(w);
+  const p = mesh(new T.CircleGeometry(r*0.45, 14), toon('#16131c'), false); p.position.set(rand(-0.4, 0.4)*r, rand(-0.45, 0.1)*r, 0.02); e.add(p);
+  return e;
+}
+function house(x, z, w, d, wall, roof, door){
+  const g = new T.Group(), h = 2.2;
+  const body = mesh(GB, toon(wall)); body.scale.set(w, h, d); body.position.y = h/2; outline(body, 1.025); g.add(body);
+  const rf = mesh(new T.ConeGeometry(1, 1, 4), toon(roof)); rf.rotation.set(0, Math.PI/4, rand(-0.07, 0.07)); rf.scale.set(w*0.8, 1.7, d*0.8); rf.position.y = h + 0.82; outline(rf, 1.04); g.add(rf);
+  const ch = mesh(GB, toon('#9a5a3a')); ch.scale.set(0.35, 0.9, 0.35); ch.position.set(w*0.25, h + 1.05, -door*d*0.15); outline(ch, 1.06); g.add(ch);
+  const front = new T.Group(); front.position.z = door*(d/2 + 0.02); front.rotation.y = door > 0 ? 0 : Math.PI; g.add(front);
+  const dr = mesh(GB, toon('#7a4a26')); dr.scale.set(0.75, 1.25, 0.06); dr.position.set(0, 0.62, 0); front.add(dr);
+  const knob = mesh(GS, toon('#f2c230'), false); knob.scale.setScalar(0.06); knob.position.set(0.24, 0.6, 0.05); front.add(knob);
+  for (const sx of [-1, 1]) googlyDisc(front, sx*w*0.3, 1.5, 0.02, 0.3);
+  const box = mesh(GB, toon('#8a5a3b')); box.scale.set(0.7, 0.18, 0.2); box.position.set(-w*0.3, 1.07, 0.1); front.add(box);
+  for (let i = 0; i < 4; i++){ const fl = mesh(GS, toon(pick(['#ff8fb1', '#ffd23f', '#ffffff', '#b48cff'])), false); fl.scale.setScalar(0.08); fl.position.set(-w*0.3 - 0.24 + i*0.16, 1.22, 0.12); front.add(fl); }
+  g.position.set(x, 0, z); scene.add(g);
+  solidRect(x, z, w/2, d/2, h);
+}
+function mushroom(x, z, s, eyes){
+  const g = new T.Group();
+  const stem = mesh(GY, toon('#f6ead2')); stem.scale.set(0.16*s, 0.7*s, 0.16*s); stem.position.y = 0.35*s; outline(stem, 1.08); g.add(stem);
+  const cap = mesh(new T.SphereGeometry(1, 16, 8, 0, TAU, 0, Math.PI/2), toon(pick(['#e0412b', '#d9472b', '#b05ad9']))); cap.scale.set(0.55*s, 0.42*s, 0.55*s); cap.position.y = 0.66*s; outline(cap, 1.05); g.add(cap);
+  for (let i = 0; i < 6; i++){ const a = rand(0, TAU), el = rand(0.25, 1.2); const dot = mesh(GS, toon('#ffffff'), false); dot.scale.setScalar(0.07*s); dot.position.set(Math.cos(a)*Math.cos(el)*0.55*s, 0.66*s + Math.sin(el)*0.42*s, Math.sin(a)*Math.cos(el)*0.55*s); g.add(dot); }
+  if (eyes) for (const sx of [-1, 1]) googlyDisc(g, sx*0.07*s, 0.45*s, 0.17*s, 0.06*s);
+  g.position.set(x, 0, z); g.rotation.set(rand(-0.08, 0.08), eyes ? 0 : rand(0, TAU), rand(-0.08, 0.08)); scene.add(g);
+  if (s > 1.4) solidCircle(x, z, 0.2*s, s);
+}
+function bush(x, z, s){
+  const g = new T.Group(), col = toon(pick(['#3f9d48', '#4aaa4f', '#5cb85c']));
+  for (const [ox, oy, oz, k] of [[0, 0.32, 0, 0.45], [0.35, 0.25, 0.1, 0.33], [-0.3, 0.22, -0.1, 0.32]]){ const b = mesh(new T.IcosahedronGeometry(1, 0), col); b.scale.setScalar(k*s); b.position.set(ox*s, oy*s, oz*s); g.add(b); }
+  if (Math.random() < 0.4) for (let i = 0; i < 3; i++){ const be = mesh(GS, toon('#d93a4a'), false); be.scale.setScalar(0.06*s); be.position.set(rand(-0.3, 0.3)*s, rand(0.3, 0.6)*s, rand(0.2, 0.4)*s); g.add(be); }
+  g.position.set(x, 0, z); g.rotation.y = rand(0, TAU); scene.add(g);
+}
+(function buildPlaces(){
+  // caminhos até os lugares
+  pathStrip(1.5, 26, 21, 26, 2.4); pathStrip(-1.5, -23, -27, -23, 2.2); pathStrip(1.5, -31, 9.5, -31, 2);
+  const disc = (x, z, r, col, y=0.02) => { const m = mesh(new T.CircleGeometry(r, 32), lam(col), false); m.rotation.x = -Math.PI/2; m.position.set(x, y, z); scene.add(m); return m; };
+
+  // Vila Pancada
+  disc(25, 26, 4.6, '#e9d3a0', 0.018);
+  house(20, 21, 3.2, 2.8, '#ffe1a8', '#3b64d6', 1);
+  house(30, 21, 3.0, 2.6, '#ffd0d0', '#2b9a4a', 1);
+  house(20, 31, 3.4, 3.0, '#d6f0ff', '#d9472b', -1);
+  house(30, 31, 3.0, 2.8, '#e8ffd6', '#8e44ad', -1);
+  {
+    const g = new T.Group();
+    const wall = mesh(new T.CylinderGeometry(0.85, 0.9, 0.7, 14), toon('#a7a091')); wall.position.y = 0.35; outline(wall, 1.05); g.add(wall);
+    const water = mesh(new T.CircleGeometry(0.7, 16), lam('#4fb0e8'), false); water.rotation.x = -Math.PI/2; water.position.y = 0.62; g.add(water);
+    for (const sx of [-1, 1]){ const p = mesh(GY, toon('#8a5a3b')); p.scale.set(0.07, 1.6, 0.07); p.position.set(sx*0.7, 0.8, 0); g.add(p); }
+    const rf = mesh(new T.ConeGeometry(1.15, 0.7, 4), toon('#d9472b')); rf.rotation.y = Math.PI/4; rf.position.y = 1.85; outline(rf, 1.05); g.add(rf);
+    const bucket = mesh(new T.CylinderGeometry(0.16, 0.12, 0.22, 10), toon('#9a6a45')); bucket.position.y = 1.1; g.add(bucket);
+    g.position.set(25, 0, 26); scene.add(g); solidCircle(25, 26, 0.95, 1.5);
+  }
+  for (const [x, z] of [[21.5, 24], [28.5, 28]]){
+    const p = mesh(GY, toon('#2a2140')); p.scale.set(0.06, 2.2, 0.06); p.position.set(x, 1.1, z); scene.add(p);
+    const l = mesh(GS, new T.MeshBasicMaterial({color:'#fff3a8'}), false); l.scale.setScalar(0.2); l.position.set(x, 2.25, z); scene.add(l);
+    colliders.push({x, z, r:0.15});
+  }
+
+  // Fazenda do Seu Zé
+  const FX = -27, FZ = -29, fw = 6, fd = 5, wood = toon('#9a6a45');
+  disc(FX, FZ, 7.2, '#c9b07a', 0.012);
+  const postG = new T.BoxGeometry(0.14, 0.9, 0.14), railG = new T.BoxGeometry(1, 0.08, 0.06);
+  const fenceLine = (x1, z1, x2, z2) => {
+    const len = Math.hypot(x2 - x1, z2 - z1), n = Math.max(1, Math.round(len/1.2)), ang = Math.atan2(z2 - z1, x2 - x1);
+    for (let i = 0; i <= n; i++){ const p = mesh(postG, wood); p.position.set(x1 + (x2 - x1)*i/n, 0.45, z1 + (z2 - z1)*i/n); p.rotation.z = rand(-0.08, 0.08); scene.add(p); }
+    for (const y of [0.35, 0.68]){ const r = mesh(railG, wood); r.scale.x = len; r.position.set((x1 + x2)/2, y, (z1 + z2)/2); r.rotation.y = -ang; scene.add(r); }
+    const cx = (x1 + x2)/2, cz = (z1 + z2)/2;
+    solidRect(cx, cz, Math.abs(x2 - x1)/2 + 0.08, Math.abs(z2 - z1)/2 + 0.08, 0.9);
+  };
+  fenceLine(FX - fw, FZ - fd, FX + fw, FZ - fd);
+  fenceLine(FX - fw, FZ - fd, FX - fw, FZ + fd);
+  fenceLine(FX + fw, FZ - fd, FX + fw, FZ + fd);
+  fenceLine(FX - fw, FZ + fd, FX - 1.4, FZ + fd);
+  fenceLine(FX + 1.4, FZ + fd, FX + fw, FZ + fd);
+  {
+    const g = new T.Group(), bw = 3.8, bd = 3.2, bh = 2.4;
+    const body = mesh(GB, toon('#c8402a')); body.scale.set(bw, bh, bd); body.position.y = bh/2; outline(body, 1.025); g.add(body);
+    const rf = mesh(new T.ConeGeometry(1, 1, 4), toon('#6b3a2a')); rf.rotation.y = Math.PI/4; rf.scale.set(bw*0.8, 1.5, bd*0.8); rf.position.y = bh + 0.72; outline(rf, 1.04); g.add(rf);
+    const dr = mesh(GB, toon('#ffffff')); dr.scale.set(1.5, 1.6, 0.06); dr.position.set(0, 0.8, bd/2 + 0.03); g.add(dr);
+    for (const r of [0.82, -0.82]){ const x = mesh(GB, toon('#c8402a')); x.scale.set(1.9, 0.14, 0.04); x.rotation.z = r; x.position.set(0, 0.8, bd/2 + 0.07); g.add(x); }
+    googlyDisc(g, 0, 2.05, bd/2 + 0.03, 0.28);
+    g.position.set(FX - 3.2, 0, FZ - 2); scene.add(g); solidRect(FX - 3.2, FZ - 2, bw/2, bd/2, bh);
+  }
+  for (let x = FX + 0.6; x <= FX + 5; x += 1.3) for (let z = FZ - 4; z <= FZ + 1.6; z += 1.3){
+    const p = mesh(GS, toon(pick(['#f28c28', '#e8771b', '#f5a03a']))); p.scale.set(0.32, 0.24, 0.32); p.position.set(x + rand(-0.15, 0.15), 0.22, z + rand(-0.15, 0.15)); outline(p, 1.08); scene.add(p);
+    const st = mesh(GY, toon('#3f8a3a'), false); st.scale.set(0.03, 0.14, 0.03); st.position.set(p.position.x, 0.5, p.position.z); scene.add(st);
+  }
+  for (const [x, z] of [[FX + 4.6, FZ + 3.6], [FX + 2.9, FZ + 3.9], [FX - 4.5, FZ + 3.4]]){
+    const h = mesh(new T.CylinderGeometry(0.7, 0.75, 0.9, 12), toon('#f2c94c')); h.rotation.set(Math.PI/2, rand(0, TAU), 0); h.position.set(x, 0.7, z); outline(h, 1.05); scene.add(h);
+    solidCircle(x, z, 0.75, 1.4);
+  }
+  {
+    const g = new T.Group();
+    const post = mesh(GY, wood); post.scale.set(0.07, 2.1, 0.07); post.position.y = 1.05; g.add(post);
+    const bar = mesh(GY, wood); bar.scale.set(0.05, 1.5, 0.05); bar.rotation.z = Math.PI/2; bar.position.y = 1.5; g.add(bar);
+    const shirt = mesh(GS, toon('#4a7bd0')); shirt.scale.set(0.32, 0.4, 0.22); shirt.position.y = 1.35; outline(shirt, 1.08); g.add(shirt);
+    const head = mesh(GS, toon('#e8d29a')); head.scale.setScalar(0.3); head.position.y = 2.05; outline(head, 1.08); g.add(head);
+    googlyDisc(g, -0.11, 2.1, 0.27, 0.1, -0.15); googlyDisc(g, 0.11, 2.07, 0.27, 0.08, 0.15);
+    const hb = mesh(new T.CylinderGeometry(0.5, 0.5, 0.04, 16), toon('#d9b45a')); hb.position.y = 2.25; hb.rotation.z = 0.15; g.add(hb);
+    const ht = mesh(new T.ConeGeometry(0.28, 0.4, 12), toon('#d9b45a')); ht.position.y = 2.45; ht.rotation.z = 0.15; g.add(ht);
+    g.position.set(FX + 2.6, 0, FZ - 1.3); g.rotation.y = Math.PI/4; scene.add(g); colliders.push({x:FX + 2.6, z:FZ - 1.3, r:0.25});
+  }
+
+  // Acampamento
+  const CX = 12, CZ = -31;
+  disc(CX, CZ, 4.5, '#cdb58a', 0.012);
+  {
+    const g = new T.Group();
+    for (let i = 0; i < 8; i++){ const a = i/8*TAU, s = mesh(new T.DodecahedronGeometry(0.16, 0), toon('#8f887b')); s.position.set(Math.cos(a)*0.55, 0.1, Math.sin(a)*0.55); g.add(s); }
+    for (let i = 0; i < 3; i++){ const l = mesh(GY, toon('#7a4a26')); l.scale.set(0.08, 0.8, 0.08); l.rotation.set(Math.PI/2.4, i/3*TAU, 0); l.position.y = 0.15; g.add(l); }
+    const flame = new T.Group(); flame.position.y = 0.1; g.add(flame);
+    const f1 = mesh(new T.ConeGeometry(0.3, 0.8, 8), new T.MeshBasicMaterial({color:'#ff8a1f'}), false); f1.position.y = 0.4; flame.add(f1);
+    const f2 = mesh(new T.ConeGeometry(0.16, 0.5, 8), new T.MeshBasicMaterial({color:'#ffe066'}), false); f2.position.y = 0.33; flame.add(f2);
+    fires.push(flame);
+    g.position.set(CX, 0, CZ); scene.add(g); colliders.push({x:CX, z:CZ, r:0.7});
+  }
+  for (const [x, z, ry] of [[CX - 1.8, CZ + 0.2, 0], [CX + 0.2, CZ + 1.8, Math.PI/2]]){
+    const l = mesh(GY, toon('#8a5a3b')); l.scale.set(0.25, 1.6, 0.25); l.rotation.set(0, ry, Math.PI/2); l.position.set(x, 0.25, z); outline(l, 1.06); scene.add(l);
+    solidRect(x, z, ry ? 0.25 : 0.8, ry ? 0.8 : 0.25, 0.5);
+  }
+  {
+    const t = mesh(new T.ConeGeometry(1.4, 1.8, 4), toon('#f28c28')); t.rotation.y = Math.PI/4; t.position.set(CX + 3, 0.9, CZ - 1.6); outline(t, 1.04); scene.add(t);
+    const dr = mesh(new T.ConeGeometry(0.5, 1.1, 3), toon('#4a2c14'), false); dr.position.set(CX + 3.55, 0.55, CZ - 1.05); dr.rotation.y = Math.PI/4; scene.add(dr);
+    solidCircle(CX + 3, CZ - 1.6, 1.2, 1.8);
+  }
+  for (const [x, z, s] of [[CX - 3.5, CZ - 2.5, 1.2], [CX + 4.2, CZ + 2.6, 0.9], [CX - 2.6, CZ + 3.4, 0.8], [CX + 0.5, CZ - 4.3, 1.4]]){
+    const r = mesh(new T.DodecahedronGeometry(1, 0), toon('#a7a091')); r.position.set(x, s*0.45, z); r.scale.set(s, s*0.8, s); r.rotation.set(rand(0, 1), rand(0, TAU), 0); outline(r, 1.04); scene.add(r);
+    solidCircle(x, z, s*0.9, s);
+  }
+
+  // Lago Raso: vitórias-régias, píer e barquinho
+  for (let i = 0; i < 9; i++){
+    const a = rand(0, TAU), d = rand(0.8, POND.r - 0.7);
+    const pad = mesh(new T.CircleGeometry(rand(0.28, 0.45), 16, 0.4, TAU - 0.6), lam('#5cb85c'), false);
+    pad.rotation.set(-Math.PI/2, 0, rand(0, TAU)); pad.position.set(POND.x + Math.cos(a)*d, 0.045, POND.z + Math.sin(a)*d); scene.add(pad);
+    if (Math.random() < 0.4){ const fl = mesh(GS, toon('#ff8fb1'), false); fl.scale.set(0.1, 0.08, 0.1); fl.position.set(pad.position.x, 0.1, pad.position.z); scene.add(fl); }
+  }
+  {
+    const pier = mesh(GB, toon('#a8784a')); pier.scale.set(1.1, 0.12, 2.8); pier.position.set(POND.x + 1.2, 0.14, POND.z - POND.r + 0.9); outline(pier, 1.03); scene.add(pier);
+    for (const [ox, oz] of [[-0.5, -1.2], [0.5, -1.2], [-0.5, 1.2], [0.5, 1.2]]){ const p = mesh(GY, toon('#7a4a26')); p.scale.set(0.07, 0.5, 0.07); p.position.set(pier.position.x + ox, 0.1, pier.position.z + oz); scene.add(p); }
+    const boat = new T.Group();
+    const hull = mesh(new T.SphereGeometry(1, 14, 8, 0, TAU, Math.PI/2, Math.PI/2), toon('#c8402a')); hull.scale.set(0.55, 0.35, 1.2); outline(hull, 1.05); boat.add(hull);
+    const seat = mesh(GB, toon('#f3dfb0')); seat.scale.set(0.9, 0.06, 0.25); seat.position.y = -0.05; boat.add(seat);
+    boat.position.set(POND.x - 1.6, 0.18, POND.z + 1.2); boat.rotation.y = 0.7; scene.add(boat); fires.push({boat});
+  }
+
+  // Bosque Sombrio: chão escuro e cogumelos gigantes
+  disc(-29, 29, 9.8, '#4f8f43', 0.011);
+  for (let i = 0; i < 9; i++){ const a = rand(0, TAU), d = rand(5.6, 6.6); mushroom(-29 + Math.cos(a)*d, 29 + Math.sin(a)*d, rand(1.0, 2.4), i === 0); }
+
+  // placas
+  sign(3.3, 27.8, ['Vila Pancada', 'casas que olham']);
+  sign(-19.6, 2.6, ['Arena PvP', 'F perto de amigo']);
+  sign(-3.3, -21.3, ['Fazenda', 'do Seu Zé']);
+  sign(-19.2, 26.4, ['Bosque Sombrio', 'nível 7–10!']);
+  sign(3.2, -29.2, ['Acampamento', 'tem fogueira']);
+  sign(3.2, 3.2, ['Centro ↓  Vila ↗', 'Arena ←  Leste →']);
+})();
+
 (function buildNature(){
   const pond = mesh(new T.CircleGeometry(POND.r, 36), new T.MeshLambertMaterial({color:'#4fb0e8'}), false);
   pond.rotation.x = -Math.PI/2; pond.position.set(POND.x, 0.03, POND.z); scene.add(pond);
@@ -412,6 +615,7 @@ const POND = {x:-12, z:25, r:4.5};
     if (Math.hypot(x - ARENA.x, z - ARENA.z) < ARENA.r + 2.5 + pad) return true;
     if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 1.5 + pad) return true;
     if (PATCHES.some(p => Math.hypot(x - p.x, z - p.z) < p.r + 1.5 + pad)) return true;
+    if (ZONES.some(zn => Math.hypot(x - zn.x, z - zn.z) < zn.r + pad)) return true;
     return colliders.some(c => Math.hypot(x - c.x, z - c.z) < c.r + 1.2 + pad);
   };
   const trunkG = new T.CylinderGeometry(0.22, 0.3, 1.4, 6), leafG = new T.IcosahedronGeometry(1, 0), rockG = new T.DodecahedronGeometry(1, 0);
@@ -432,6 +636,11 @@ const POND = {x:-12, z:25, r:4.5};
     b.position.set(x, s*0.2, z); b.isStatic = true; world.addBody(b);
   }
   for (let i = -MAP; i <= MAP; i += 3.2){ for (const [x, z] of [[i, -MAP-1],[i, MAP+1],[-MAP-1, i],[MAP+1, i]]) tree(x + rand(-0.5,0.5), z + rand(-0.5,0.5), rand(1.1, 1.5)); }
+  // anel de árvores fechando o Bosque Sombrio (entrada pelo leste)
+  for (let a = 0; a < TAU; a += 0.3){
+    if (Math.abs(wrapA(a)) < 0.42) continue;
+    for (const rr of [7.2, 8.9]){ const x = -29 + Math.cos(a)*rr + rand(-0.4, 0.4), z = 29 + Math.sin(a)*rr + rand(-0.4, 0.4); if (Math.abs(x) < MAP - 1 && Math.abs(z) < MAP - 1) tree(x, z, rand(1.0, 1.45)); }
+  }
   let placed = 0, tries = 0;
   while (placed < 55 && tries++ < 2000){ const x = rand(-MAP+3, MAP-3), z = rand(-MAP+3, MAP-3); if (!blocked(x, z, 0)){ tree(x, z, rand(0.8, 1.3)); placed++; } }
   placed = 0; tries = 0;
@@ -444,8 +653,21 @@ const POND = {x:-12, z:25, r:4.5};
     const b = mesh(blotG, lam(pick(['#7cc762', '#92d877', '#80cb67'])), false);
     b.rotation.x = -Math.PI/2; b.position.set(x, 0.008, z); b.scale.set(rand(0.8, 2.6), rand(0.6, 1.8), 1); b.rotation.z = rand(0, TAU); scene.add(b);
   }
-  const flowerG = new T.SphereGeometry(0.09, 6, 4);
-  for (let i = 0; i < 160; i++){ const x = rand(-MAP, MAP), z = rand(-MAP, MAP); if (blocked(x, z, -1)) continue; const f = mesh(flowerG, toon(pick(['#fff','#ffd23f','#ff8fb1','#b48cff'])), false); f.position.set(x, 0.08, z); scene.add(f); }
+  placed = 0; tries = 0;
+  while (placed < 45 && tries++ < 2000){ const x = rand(-MAP+2, MAP-2), z = rand(-MAP+2, MAP-2); if (!blocked(x, z, -0.6)){ bush(x, z, rand(0.8, 1.4)); placed++; } }
+  placed = 0; tries = 0;
+  while (placed < 26 && tries++ < 2000){ const x = rand(-MAP+2, MAP-2), z = rand(-MAP+2, MAP-2); if (!blocked(x, z, -0.8)){ mushroom(x, z, rand(0.5, 1.1), Math.random() < 0.15); placed++; } }
+  // canteiros de flores com cabinho
+  const flowerG = new T.SphereGeometry(0.1, 6, 4), stemG = new T.CylinderGeometry(0.015, 0.015, 0.25, 4);
+  for (let i = 0; i < 70; i++){
+    const cx = rand(-MAP, MAP), cz = rand(-MAP, MAP); if (blocked(cx, cz, -1.5)) continue;
+    const col = toon(pick(['#ffffff','#ffd23f','#ff8fb1','#b48cff','#ff6b6b']));
+    for (let k = 0; k < 5; k++){
+      const x = cx + rand(-0.6, 0.6), z = cz + rand(-0.6, 0.6);
+      const st = mesh(stemG, toon('#3f8a3a'), false); st.position.set(x, 0.12, z); scene.add(st);
+      const f = mesh(flowerG, col, false); f.position.set(x, 0.27, z); scene.add(f);
+    }
+  }
 })();
 
 /* ================= Treinador ================= */
@@ -534,17 +756,135 @@ function animateTrainer(m, st, dt){
   trainer.body.position.set(trainer.pos.x, 0.8, trainer.pos.z); world.addBody(trainer.body);
 })();
 const trainerFwd = () => new T.Vector3(Math.sin(trainer.yaw), 0, Math.cos(trainer.yaw));
-function moveTrainer(dx, dz){
-  let x = clamp(trainer.pos.x + dx, -MAP + 1, MAP - 1), z = clamp(trainer.pos.z + dz, -MAP + 1, MAP - 1);
-  for (const c of colliders){ const ex = x - c.x, ez = z - c.z, d = Math.hypot(ex, ez), m = c.r + 0.35; if (d < m && d > 1e-4){ x = c.x + ex/d*m; z = c.z + ez/d*m; } }
+function resolveCollision(x, z, rad){
+  x = clamp(x, -MAP + 1, MAP - 1); z = clamp(z, -MAP + 1, MAP - 1);
+  for (const c of colliders){ const ex = x - c.x, ez = z - c.z, d = Math.hypot(ex, ez), m = c.r + rad; if (d < m && d > 1e-4){ x = c.x + ex/d*m; z = c.z + ez/d*m; } }
   for (const r of rects){
-    const hw = r.hw + 0.35, hd = r.hd + 0.35;
+    const hw = r.hw + rad, hd = r.hd + rad;
     if (Math.abs(x - r.x) < hw && Math.abs(z - r.z) < hd){
       const px = hw - Math.abs(x - r.x), pz = hd - Math.abs(z - r.z);
       if (px < pz) x = r.x + Math.sign(x - r.x)*hw; else z = r.z + Math.sign(z - r.z)*hd;
     }
   }
+  return [x, z];
+}
+function moveTrainer(dx, dz){
+  const [x, z] = resolveCollision(trainer.pos.x + dx, trainer.pos.z + dz, 0.35);
   trainer.pos.x = x; trainer.pos.z = z;
+}
+
+/* ---------- Moradores bobos e borboletas ---------- */
+const NPC_SETS = {
+  vila:['Bem-vindo à Vila Pancada! Aqui todo mundo já levou uma pancada.', 'Minha casa tem olhos. Juro que ela pisca à noite.', 'No Bosque Sombrio tem bicho nível 10. Eu fui. Voltei rolando.',
+    'A Loja do Mato vende Semente Dourada. Custa um rim.', 'Força vence Agilidade, Agilidade vence Inteligência... e eu perco pra todos.', 'Aperte Z pra abrir a mochila. Ou pra dormir. Zzz.',
+    'Vi um Guepardo passar tão rápido que ele chegou antes de sair.', 'Animais na reserva também ganham XP. Metade, mas ganham!'],
+  fazenda:['Esse espantalho não espanta nada. Ele tem medo de corvo.', 'Minhas abóboras são orgânicas. E levemente assombradas.', 'Um Javali comeu metade da plantação e pediu sobremesa.', 'Não pisa nas abóboras! ...Tá, pode pisar, elas nem ligam.'],
+  camp:['Tô esperando o marshmallow dourar. Faz três dias.', 'Ouvi um Gorila socando o chão no Mato Bravo. Ou era trovão.', 'Dica: se o bicho estiver nocauteado, a captura fica mais fácil.'],
+  lago:['Ainda não pesquei nada. Mas o Lago Raso tem 30 centímetros.', 'Shh! Você vai espantar os peixes imaginários.', 'Hoje um Javali roubou minha isca. E minha bota.'],
+  centro:['O Centro de Cura cura tudo. Menos tédio.', 'Dica: a Pinha captura melhor que a Bolota. O Coco melhor ainda.', 'Quer duelar com amigo? Chega perto dele e aperta F!']
+};
+const npcs = [];
+function makeNpc(x, z, jacket, home, set, opts={}){
+  const m = makeTrainerModel(jacket);
+  const n = {model:m, x, z, yaw:opts.yaw ?? rand(0, TAU), moving:false, home, target:null, wait:rand(1, 4), still:!!opts.still, lines:NPC_SETS[set], talking:false, line:'', el:null};
+  if (opts.rod){
+    const rod = mesh(GY, toon('#7a4a26'), false); rod.scale.set(0.02, 1.4, 0.02); rod.position.set(0, -0.55, 0.6); rod.rotation.x = 1.0; m.arms[1].add(rod);
+    m.arms[1].rotation.x = -0.9;
+  }
+  m.g.position.set(x, 0, z); m.g.rotation.y = n.yaw;
+  colliders.push(n.col = {x, z, r:0.3});
+  npcs.push(n); return n;
+}
+makeNpc(23, 24, '#3b64d6', {x:25, z:26, r:4.5}, 'vila');
+makeNpc(27, 28, '#8e44ad', {x:25, z:26, r:4.5}, 'vila');
+makeNpc(24, 28.5, '#2b9a4a', {x:25, z:26, r:4.5}, 'vila');
+makeNpc(-24, -27, '#4a7bd0', {x:-24.5, z:-27.5, r:2.5}, 'fazenda');
+makeNpc(10.2, -32.2, '#f28c28', {x:10.5, z:-32, r:0.8}, 'camp');
+makeNpc(POND.x + 1.2, POND.z - POND.r + 2.1, '#16a3a3', null, 'lago', {still:true, rod:true, yaw:0});
+makeNpc(-3.5, -12.5, '#d63b8f', {x:-3.5, z:-12.5, r:2}, 'centro');
+function updateNpcs(dt){
+  for (const n of npcs){
+    const dT = Math.hypot(trainer.pos.x - n.x, trainer.pos.z - n.z);
+    const near = dT < 3.2 && mode === 'world';
+    if (near && !n.talking){ n.talking = true; n.line = pick(n.lines); n.target = null; }
+    if (!near) n.talking = false;
+    n.moving = false;
+    if (n.talking) n.yaw = lerpAngle(n.yaw, Math.atan2(trainer.pos.x - n.x, trainer.pos.z - n.z), 0.12);
+    else if (!n.still){
+      if (!n.target){
+        n.wait -= dt;
+        if (n.wait <= 0){ const a = rand(0, TAU), d = rand(0, n.home.r); n.target = {x:n.home.x + Math.cos(a)*d, z:n.home.z + Math.sin(a)*d}; }
+      } else {
+        const dx = n.target.x - n.x, dz = n.target.z - n.z, l = Math.hypot(dx, dz);
+        if (l < 0.2){ n.target = null; n.wait = rand(1.5, 5); }
+        else {
+          n.col.r = 0;
+          const [x, z] = resolveCollision(n.x + dx/l*1.4*dt, n.z + dz/l*1.4*dt, 0.3);
+          if (Math.hypot(x - n.x, z - n.z) < 0.004){ n.target = null; n.wait = rand(0.5, 2); }
+          n.x = x; n.z = z; n.col.r = 0.3; n.col.x = x; n.col.z = z;
+          n.yaw = lerpAngle(n.yaw, Math.atan2(dx, dz), 0.15); n.moving = true;
+        }
+      }
+    }
+  }
+}
+function renderNpcs(){
+  for (const n of npcs){
+    n.model.g.position.set(n.x, 0, n.z); n.model.g.rotation.y = n.yaw;
+    animateTrainer(n.model, n, 1/60);
+    if (n.talking && mode === 'world'){
+      if (!n.el){ n.el = document.createElement('div'); n.el.className = 'bubble'; document.body.appendChild(n.el); }
+      if (n.el.textContent !== n.line) n.el.textContent = n.line;
+      const v = new T.Vector3(n.x, 2.3, n.z).project(camera);
+      n.el.style.transform = `translate(${(v.x + 1)/2*innerWidth}px, ${(1 - v.y)/2*innerHeight}px) translate(-50%, -100%)`;
+      n.el.hidden = false;
+    } else if (n.el) n.el.hidden = true;
+  }
+}
+const butterflies = [];
+(function buildButterflies(){
+  const wingG = new T.CircleGeometry(0.11, 10);
+  for (let i = 0; i < 28; i++){
+    let hx, hz, tries = 0;
+    do { hx = rand(-MAP + 3, MAP - 3); hz = rand(-MAP + 3, MAP - 3); } while (tries++ < 20 && Math.hypot(hx - POND.x, hz - POND.z) < POND.r + 2);
+    const mat = new T.MeshBasicMaterial({color:pick(['#ffd23f', '#ff8fb1', '#7cc7ff', '#ffffff', '#c58bff']), side:T.DoubleSide});
+    const g = new T.Group();
+    const wl = new T.Mesh(wingG, mat), wr = new T.Mesh(wingG, mat);
+    wl.position.x = -0.1; wr.position.x = 0.1;
+    const pl = new T.Group(), pr = new T.Group(); pl.add(wl); pr.add(wr); g.add(pl, pr);
+    const body = new T.Mesh(GS, toon('#2a2140')); body.scale.set(0.025, 0.025, 0.09); g.add(body);
+    scene.add(g);
+    butterflies.push({g, pl, pr, hx, hz, ph:rand(0, TAU), sp:rand(0.6, 1.3)});
+  }
+})();
+function renderAmbient(){
+  const t = clock;
+  for (const b of butterflies){
+    const x = b.hx + Math.sin(t*0.3*b.sp + b.ph)*3 + Math.sin(t*1.7*b.sp + b.ph)*0.4;
+    const z = b.hz + Math.cos(t*0.23*b.sp + b.ph*1.3)*3;
+    const y = 0.9 + Math.sin(t*2.2 + b.ph)*0.35;
+    const p = b.g.position, dx = x - p.x, dz = z - p.z;
+    if (dx*dx + dz*dz > 1e-6) b.g.rotation.y = Math.atan2(dx, dz);
+    p.set(x, y, z);
+    const f = Math.sin(t*24*b.sp + b.ph)*1.1;
+    b.pl.rotation.z = f; b.pr.rotation.z = -f;
+  }
+  fires.forEach((f, i) => {
+    if (f.boat){ f.boat.position.y = 0.16 + Math.sin(t*1.6)*0.04; f.boat.rotation.z = Math.sin(t*1.1)*0.06; return; }
+    f.scale.set(1 + Math.sin(t*17 + i)*0.12, 1 + Math.sin(t*23 + i)*0.22, 1 + Math.cos(t*19 + i)*0.12);
+    f.rotation.y = t*2;
+  });
+}
+let currentArea = null, areaTimer = null;
+function updateArea(){
+  const x = trainer.pos.x, z = trainer.pos.z;
+  const zn = ZONES.find(a => Math.hypot(x - a.x, z - a.z) < a.r) || PATCHES.find(p => Math.hypot(x - p.x, z - p.z) < p.r + 0.5);
+  const name = zn ? zn.name : null;
+  if (name === currentArea) return;
+  currentArea = name;
+  if (!name) return;
+  const el = $('area'); el.textContent = name; el.classList.add('show');
+  clearTimeout(areaTimer); areaTimer = setTimeout(() => el.classList.remove('show'), 2200);
 }
 
 /* ================= Visual dos animais ================= */
@@ -2047,6 +2387,7 @@ function step(dt){
   }
   for (const k in pressed) delete pressed[k];
   if (mode === 'world' || mode === 'battle') updateSpawns(dt);
+  if (mode === 'world' || mode === 'battle'){ updateNpcs(dt); if (mode === 'world') updateArea(); }
   if (net.room && mode !== 'title'){
     updateRemotes(); publishLobby(dt);
     for (const r of net.remotes.values()) if (r.pet && !r.pet.removed) aiFollowTo(r.pet, r.x, r.z, r.yaw);
@@ -2084,6 +2425,7 @@ function step(dt){
 function render(){
   for (const c of creatures) syncCreature(c);
   if (battle && battle.pvp && !battle.host) renderPuppets();
+  renderNpcs(); renderAmbient();
   for (const b of balls){
     b.mesh.position.copy(b.body.position); b.mesh.quaternion.copy(b.body.quaternion);
     if (battle && battle.capture && battle.capture.ball === b){ b.mesh.rotation.set(0, 0, battle.capture.wob || 0); b.mesh.position.y = Math.max(0.6, b.body.position.y) + Math.sin(clock*3)*0.04; b.mesh.scale.setScalar(1.6); }
