@@ -1,0 +1,2189 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>Pancadamon</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<style>
+/* Layout: cena 3D isométrica em tela cheia; HUD em cartões flutuantes nos cantos; menus como cartão central */
+:root{
+  --bg:#9fd4f2; --panel:#fffaf0; --ink:#2a2140; --muted:#6b6283; --line:#2a2140; --soft:#f1e9d8;
+  --accent:#ff5a36; --accent-ink:#fff; --hp:#38c96a; --hpmid:#f2b632; --hplow:#ec4545;
+  --str:#d9472b; --agi:#2b9a4a; --int:#3b64d6;
+  --display:'Lilita One','Arial Black',system-ui,sans-serif;
+  --body:'Nunito',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --panel:#262a44; --ink:#f4efff; --muted:#aaa3c8; --line:#0c0d1c; --soft:#323756; color-scheme:dark } }
+:root[data-theme="dark"]{ --panel:#262a44; --ink:#f4efff; --muted:#aaa3c8; --line:#0c0d1c; --soft:#323756; color-scheme:dark }
+[hidden]{display:none!important}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--body);overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:none}
+#stage{position:fixed;inset:0}
+#stage canvas{display:block;width:100%;height:100%}
+.card-ui{background:var(--panel);border:3px solid var(--line);border-radius:14px;box-shadow:0 4px 0 var(--line)}
+#team{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));display:flex;flex-direction:column;gap:6px;width:min(240px,44vw)}
+.tm{padding:5px 8px;display:grid;grid-template-columns:34px 1fr auto;gap:0 8px;align-items:center}
+.tm img{width:34px;height:34px;grid-row:1/3;border-radius:8px;background:var(--soft)}
+.tm.lead{outline:3px solid var(--accent);outline-offset:-1px}
+.tm.out{opacity:.5}
+.tm .n{font-family:var(--display);font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.tm .l{font-weight:800;font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;display:flex;gap:4px;align-items:center}
+.tm .bar{grid-column:2/4}
+.bar{height:10px;border:2px solid var(--line);border-radius:8px;background:var(--soft);overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--hp);transition:width .15s}
+.chip{display:inline-block;font-size:11px;font-weight:800;color:#fff;border-radius:6px;padding:0 6px;border:2px solid var(--line);text-transform:uppercase;letter-spacing:.05em;line-height:16px}
+.chip.forca{background:var(--str)} .chip.agilidade{background:var(--agi)} .chip.inteligencia{background:var(--int)}
+#wild{position:fixed;right:12px;top:calc(12px + env(safe-area-inset-top,0px));width:min(270px,44vw);padding:8px 12px}
+#wild .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#wild .n{font-family:var(--display);font-size:22px;display:flex;gap:8px;align-items:center;min-width:0}
+#wild .n img{width:36px;height:36px;border-radius:8px;background:var(--soft)}
+#wild .l{font-weight:800;color:var(--muted);font-variant-numeric:tabular-nums}
+#wild .bar{height:13px;margin-top:6px}
+#wild .meta{display:flex;justify-content:space-between;align-items:center;margin-top:5px;font-size:12px;font-weight:800;color:var(--muted);gap:6px}
+#matchup{margin-top:4px;font-size:12px;font-weight:800}
+#pills{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);display:flex;gap:8px}
+.pill{padding:4px 12px;border-radius:999px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap;font-size:14px}
+button.pill{padding:4px 12px;font-size:14px;box-shadow:0 4px 0 var(--line)}
+#prompt{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);padding:8px 16px;font-weight:800}
+#toasts{position:fixed;left:50%;bottom:calc(140px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);display:flex;flex-direction:column-reverse;align-items:center;gap:6px;pointer-events:none;width:min(560px,calc(100vw - 32px))}
+.toast{padding:7px 14px;font-weight:800;text-align:center;transition:opacity .4s,transform .4s}
+#help{position:fixed;left:16px;right:16px;bottom:calc(12px + env(safe-area-inset-bottom,0px));text-align:center;font-size:13px;font-weight:800;color:#1d2a3a;text-shadow:0 1px 0 rgba(255,255,255,.6)}
+#help kbd{font-family:var(--body);background:#fffaf0;color:#2a2140;border:2px solid #2a2140;border-radius:6px;padding:0 5px}
+.dmg{position:fixed;left:0;top:0;font-family:var(--display);font-size:26px;color:#fff;-webkit-text-stroke:2px #2a2140;paint-order:stroke fill;pointer-events:none;white-space:nowrap}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .5s}
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:16px;background:color-mix(in srgb,#9fd4f2 45%,transparent);backdrop-filter:blur(4px);overflow-y:auto}
+.card{background:var(--panel);border:4px solid var(--line);border-radius:22px;box-shadow:0 8px 0 var(--line);padding:22px;width:min(860px,100%);max-height:calc(100% - 20px);overflow-y:auto}
+.logo{font-family:var(--display);font-size:clamp(40px,9vw,72px);line-height:1;margin:0;color:var(--accent);-webkit-text-stroke:3px var(--line);paint-order:stroke fill;text-shadow:0 5px 0 var(--line)}
+.sub{color:var(--muted);font-weight:800;margin:8px 0 14px}
+h2{font-family:var(--display);font-weight:400;font-size:26px;margin:0 0 10px}
+.tri{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-weight:800;font-size:14px;margin-bottom:16px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.mon{border:3px solid var(--line);border-radius:16px;padding:12px;background:var(--soft);display:flex;flex-direction:column;gap:8px;min-width:0}
+.mon.lead{outline:4px solid var(--accent);outline-offset:-1px}
+.mon img{width:100%;max-width:170px;aspect-ratio:1;margin:0 auto;display:block}
+.mon .t{font-family:var(--display);font-size:24px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.mon p{margin:0;font-size:14px;color:var(--muted);font-weight:800}
+.attrs{display:grid;grid-template-columns:auto 1fr 30px;gap:3px 8px;align-items:center;font-size:13px;font-weight:800;font-variant-numeric:tabular-nums}
+.attrs .b{height:8px;border-radius:6px;background:var(--panel);border:2px solid var(--line);overflow:hidden}
+.attrs .b i{display:block;height:100%}
+.small{font-size:13px;color:var(--muted);font-weight:800}
+.controls{margin-top:16px;font-size:14px;font-weight:800;color:var(--muted);display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 16px}
+.controls kbd{font-family:var(--body);background:var(--soft);color:var(--ink);border:2px solid var(--line);border-radius:6px;padding:0 5px}
+button{font-family:var(--body);font-weight:800;font-size:15px;color:var(--ink);background:var(--panel);border:3px solid var(--line);border-radius:12px;padding:8px 14px;cursor:pointer;box-shadow:0 3px 0 var(--line)}
+button.primary{background:var(--accent);color:var(--accent-ink)}
+button:active{transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+#capSel{display:flex;align-items:center;gap:6px}
+#me{position:fixed;left:12px;top:calc(12px + env(safe-area-inset-top,0px));width:min(270px,44vw);padding:8px 12px}
+.fcard .row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.fcard .n{font-family:var(--display);font-size:22px;display:flex;gap:8px;align-items:center;min-width:0}
+.fcard .n img{width:36px;height:36px;border-radius:8px;background:var(--soft)}
+.fcard .l{font-weight:800;color:var(--muted);font-variant-numeric:tabular-nums}
+.fcard .bar{height:13px;margin-top:6px}
+.fcard .meta{display:flex;justify-content:space-between;align-items:center;margin-top:5px;font-size:12px;font-weight:800;color:var(--muted);gap:6px}
+#big{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-family:var(--display);font-size:clamp(56px,14vw,120px);color:#fff;-webkit-text-stroke:4px #2a2140;paint-order:stroke fill;pointer-events:none;text-shadow:0 6px 0 #2a2140}
+.tag{position:fixed;left:0;top:0;padding:2px 8px;border-radius:999px;background:var(--panel);color:var(--ink);border:3px solid var(--line);font-weight:800;font-size:12px;white-space:nowrap;pointer-events:none}
+#prompt{cursor:pointer}
+#capSel img{width:22px;height:22px;margin:-4px 0}
+.shophead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.coins{font-family:var(--display);font-size:22px;color:#b8860b;font-variant-numeric:tabular-nums}
+.sect{font-family:var(--display);font-size:20px;margin:14px 0 8px}
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.item{border:3px solid var(--line);border-radius:14px;background:var(--soft);padding:10px;display:grid;grid-template-columns:64px 1fr;gap:4px 10px;align-items:start;min-width:0}
+.item.sel{outline:4px solid var(--accent);outline-offset:-1px}
+.item img{width:64px;height:64px;grid-row:1/4}
+.item .nm{font-family:var(--display);font-size:18px;line-height:1.1}
+.item .ds{font-size:13px;font-weight:800;color:var(--muted)}
+.item .row{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between;margin-top:6px}
+.item .qty{font-weight:800;font-variant-numeric:tabular-nums}
+.item button{padding:4px 10px;font-size:13px}
+.targets{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.targets button{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;font-size:13px}
+.targets img{width:30px;height:30px}
+.hint{font-size:13px;font-weight:800;color:var(--muted);margin:6px 0 0}
+#touch{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:none;justify-content:space-between;align-items:flex-end;padding:0 12px;pointer-events:none}
+#touch .pad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:4px;pointer-events:auto}
+#touch .acts{display:grid;grid-template-columns:repeat(3,58px);gap:6px;pointer-events:auto}
+#touch button{padding:0;width:100%;height:52px;font-size:12px}
+@media (pointer:coarse){ #touch{display:flex} #help{display:none} #prompt{bottom:calc(200px + env(safe-area-inset-bottom,0px))} #toasts{bottom:calc(250px + env(safe-area-inset-bottom,0px))} }
+@media (max-width:600px){ #pills{top:auto;bottom:calc(60px + env(safe-area-inset-bottom,0px))} .tm .n{font-size:14px} }
+@media (prefers-reduced-motion:reduce){ .bar>i,.toast{transition:none} }
+</style>
+
+<div id="stage"></div>
+<div id="team" hidden></div>
+<div id="wild" class="card-ui fcard" hidden></div>
+<div id="me" class="card-ui fcard" hidden></div>
+<div id="big" hidden></div>
+<div id="pills" hidden><span class="pill card-ui" id="online" hidden>1 jogador online</span><span class="pill card-ui" id="money">0 moedas</span><span class="pill card-ui" id="capSel">Bolota ×0</span><span class="pill card-ui" id="spec" hidden>Especial pronto</span><button class="pill" id="bagBtn">Mochila (I)</button><button class="pill" id="teamBtn">Time (Tab)</button></div>
+<div id="prompt" class="card-ui" hidden></div>
+<div id="toasts"></div>
+<div id="help" hidden></div>
+<div id="fade"></div>
+<div id="touch">
+  <div class="pad"><span></span><button data-k="KeyW">▲</button><span></span><button data-k="KeyA">◀</button><button data-k="KeyE">E</button><button data-k="KeyD">▶</button><span></span><button data-k="KeyS">▼</button><span></span></div>
+  <div class="acts"><button data-k="KeyJ">Ataque</button><button data-k="KeyK">Agarra</button><button data-k="KeyL">Esp.</button><button data-k="Space">Pulo</button><button data-k="KeyT">Captura</button><button data-k="KeyR">Fugir</button><button data-k="KeyC">Troca</button><button data-k="KeyI">Mochila</button></div>
+</div>
+<div id="overlay" class="overlay" hidden><div class="card" id="card"></div></div>
+
+<script>
+const T = THREE, C = CANNON;
+const $ = id => document.getElementById(id);
+const TAU = Math.PI*2;
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const rand = (a,b) => a + Math.random()*(b-a);
+const pick = a => a[Math.floor(Math.random()*a.length)];
+const wrapA = a => { a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; };
+const lerpAngle = (a,b,t) => a + wrapA(b - a)*t;
+
+/* ================= Dados ================= */
+const ATTR = {
+  forca:{name:'Força', short:'FOR', color:'#d9472b'},
+  agilidade:{name:'Agilidade', short:'AGI', color:'#2b9a4a'},
+  inteligencia:{name:'Inteligência', short:'INT', color:'#3b64d6'}
+};
+// Força vence Agilidade, Agilidade vence Inteligência, Inteligência vence Força
+const BEATS = {forca:'agilidade', agilidade:'inteligencia', inteligencia:'forca'};
+const adv = (a, d) => BEATS[a.sp.attr] === d.sp.attr ? 1.3 : BEATS[d.sp.attr] === a.sp.attr ? 0.8 : 1;
+
+// base = [FOR, AGI, INT] no nível 1; grow = ganho por nível
+const SPECIES = {
+  urso:{name:'Urso', attr:'forca', plan:'biped', feat:'bear', color:'#8a5a3b', dark:'#4e301d', belly:'#c99b72', size:1.22, arm:1.05, leg:1.0, head:1.05,
+    base:[14,6,5], grow:[2.6,1.0,0.9], special:'slam', specialName:'Esmagada', desc:'Fica em pé, pula alto e cai por cima do inimigo.'},
+  gorila:{name:'Gorila', attr:'forca', plan:'biped', feat:'gorilla', color:'#3d3a3f', dark:'#1f1d22', belly:'#8f8a92', size:1.28, arm:1.45, leg:0.8, head:0.95,
+    base:[16,5,7], grow:[2.8,0.8,1.1], special:'quake', specialName:'Murro no Chão', desc:'Braços enormes. Soca o chão e joga todo mundo pro alto.'},
+  rinoceronte:{name:'Rinoceronte', attr:'forca', plan:'quad', feat:'rhino', color:'#9b958c', dark:'#5d5850', belly:'#bdb7ad', size:1.35, leg:0.9, head:1.05,
+    base:[17,4,3], grow:[3.0,0.7,0.6], special:'dash', specialName:'Investida de Chifre', desc:'Um tanque de quatro patas. Atropela o que estiver na frente.'},
+  javali:{name:'Javali', attr:'forca', plan:'quad', feat:'boar', color:'#6b4a35', dark:'#3b271b', belly:'#9a735a', size:0.95, leg:0.8, head:1.0,
+    base:[12,7,3], grow:[2.3,1.2,0.6], special:'dash', specialName:'Carga Selvagem', desc:'Baixinho e teimoso. Sai correndo de cabeça.'},
+  lobo:{name:'Lobo', attr:'agilidade', plan:'quad', feat:'wolf', color:'#8d939c', dark:'#4b5059', belly:'#e3e6ea', size:1.0, leg:1.1, head:0.95,
+    base:[8,14,6], grow:[1.4,2.6,1.0], special:'pounce', specialName:'Bote', desc:'Rápido e faminto. Salta em cima da presa.'},
+  guepardo:{name:'Guepardo', attr:'agilidade', plan:'quad', feat:'cheetah', color:'#e3b04b', dark:'#3a2a10', belly:'#f6e7c4', size:0.95, leg:1.2, head:0.85,
+    base:[6,17,5], grow:[1.0,3.0,0.9], special:'blitz', specialName:'Disparada', desc:'O mais rápido de todos. Ataca três vezes seguidas.'},
+  canguru:{name:'Canguru', attr:'agilidade', plan:'biped', feat:'kangaroo', color:'#c08a5a', dark:'#6e4a2b', belly:'#ecd2b4', size:1.1, arm:0.75, leg:1.25, head:0.9,
+    base:[9,13,5], grow:[1.6,2.4,0.8], special:'kick', specialName:'Coice Duplo', desc:'Pernas de mola. Pula e chuta com as duas patas.'},
+  macaco:{name:'Macaco', attr:'inteligencia', plan:'biped', feat:'monkey', color:'#7a5236', dark:'#432a19', belly:'#e7c7a3', size:0.9, arm:1.3, leg:0.85, head:1.0,
+    base:[7,9,14], grow:[1.1,1.5,2.6], special:'throw', specialName:'Pedrada', desc:'Esperto. Ataca de longe jogando pedras.'},
+  coruja:{name:'Coruja', attr:'inteligencia', plan:'biped', feat:'owl', color:'#9a7350', dark:'#5a3f28', belly:'#eadcc4', size:0.9, arm:1.0, leg:0.6, head:1.3,
+    base:[6,8,16], grow:[1.0,1.3,3.0], special:'hypno', specialName:'Pio Hipnótico', desc:'Olhar hipnótico. Deixa o inimigo tonto e confuso.'},
+  raposa:{name:'Raposa', attr:'inteligencia', plan:'quad', feat:'fox', color:'#e0742c', dark:'#3a1d0b', belly:'#fff3e6', size:0.85, leg:0.95, head:0.95,
+    base:[6,12,13], grow:[1.0,2.0,2.3], special:'blink', specialName:'Truque da Raposa', desc:'Some e aparece atrás do inimigo pra morder.'}
+};
+const STARTERS = ['urso','lobo','macaco'];
+function stats(m){
+  const sp = SPECIES[m.species], L = m.level - 1;
+  const [s, a, i] = sp.base.map((b, k) => b + sp.grow[k]*L);
+  return {
+    str:s, agi:a, int:i,
+    maxHp: Math.round(40 + s*7), power: 0.55 + s*0.035, defense: 0.75 + s*0.02,
+    speed: Math.min(1.55, 0.7 + a*0.03), atkCd: Math.max(0.18, 0.42 - a*0.008), dodge: Math.min(0.3, a*0.009), jump: Math.min(10.5, 7.5 + a*0.08),
+    specCd: Math.max(1.8, 5.5 - i*0.13), specPow: 0.6 + i*0.045
+  };
+}
+const xpNext = m => 30 + m.level*20;
+function newMember(species, level){ const m = {species, level, xp:0, nick:SPECIES[species].name}; m.maxHp = stats(m).maxHp; m.hp = m.maxHp; return m; }
+
+// Itens: cura (usados na mochila) e captura (frutos e sementes que prendem o animal dentro da casca)
+const ITEMS = {
+  fruta:{name:'Fruta Silvestre', cat:'cura', price:30, heal:30, desc:'Recupera 30 PV.'},
+  mel:{name:'Pote de Mel', cat:'cura', price:90, heal:80, desc:'Recupera 80 PV.'},
+  cesta:{name:'Cesta de Frutas', cat:'cura', price:250, heal:9999, desc:'Recupera todos os PV.'},
+  erva:{name:'Erva Reanimadora', cat:'cura', price:200, revive:0.5, desc:'Acorda um animal desmaiado com metade dos PV.'},
+  bolota:{name:'Bolota', cat:'captura', price:50, mult:1, desc:'Captura básica. A casca puxa o animal pra dentro.'},
+  pinha:{name:'Pinha', cat:'captura', price:120, mult:1.5, desc:'Escamas que fecham firme. Chance 1,5x maior.'},
+  coco:{name:'Coco', cat:'captura', price:300, mult:2.2, desc:'Casca duríssima. Chance 2,2x maior.'},
+  semente:{name:'Semente Dourada', cat:'captura', price:1500, mult:99, desc:'Rara. Captura garantida.'}
+};
+const CAPTURE_KEYS = Object.keys(ITEMS).filter(k => ITEMS[k].cat === 'captura');
+
+let game = {team:[], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota'};
+const SAVE_KEY = 'pancadamon3d_v2';
+function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(game)); }catch(e){} }
+function load(){
+  try{
+    const s = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (s && s.team && s.team.length && s.team.every(m => SPECIES[m.species])){
+      if (!s.inv){ s.inv = {bolota:s.balls || 5, fruta:3}; delete s.balls; }
+      if (typeof s.money !== 'number') s.money = 300;
+      if (!ITEMS[s.sel]) s.sel = 'bolota';
+      game = s; return true;
+    }
+  }catch(e){}
+  return false;
+}
+const count = k => game.inv[k] || 0;
+function addItem(k, n){ game.inv[k] = count(k) + n; if (game.inv[k] <= 0) delete game.inv[k]; }
+
+/* ================= Render ================= */
+const renderer = new T.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(2, devicePixelRatio || 1));
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = T.PCFSoftShadowMap;
+$('stage').appendChild(renderer.domElement);
+const scene = new T.Scene();
+const SKY = new T.Color('#9fd4f2');
+scene.background = SKY;
+const camera = new T.OrthographicCamera(-1, 1, 1, -1, 0.1, 300);
+const ISO = new T.Vector3(1, 1.2, 1).normalize().multiplyScalar(60);
+const cam = {target:new T.Vector3(0,0,-8), cur:8, shake:0};
+const FWD = new T.Vector3(-1,0,-1).normalize(), RIGHT = new T.Vector3(1,0,-1).normalize();
+function resize(){ renderer.setSize(innerWidth, innerHeight); }
+addEventListener('resize', resize);
+
+scene.add(new T.HemisphereLight('#ffffff', '#5d8a4e', 0.5));
+const sun = new T.DirectionalLight('#fff3dc', 0.7);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, {left:-22, right:22, top:22, bottom:-22, near:1, far:80});
+sun.shadow.bias = -0.0008;
+scene.add(sun, sun.target);
+
+const mats = {};
+const toon = c => mats['t'+c] || (mats['t'+c] = new T.MeshToonMaterial({color:c}));
+const lam = c => mats['l'+c] || (mats['l'+c] = new T.MeshLambertMaterial({color:c}));
+function mesh(geo, mat, shadow=true){ const m = new T.Mesh(geo, mat); m.castShadow = shadow; m.receiveShadow = true; return m; }
+const GS = new T.SphereGeometry(1, 16, 12), GC = new T.ConeGeometry(1, 1, 10), GY = new T.CylinderGeometry(1, 1, 1, 10), GB = new T.BoxGeometry(1, 1, 1);
+const GT = new T.TorusGeometry(1, 0.15, 6, 14, Math.PI*1.4);
+
+/* ================= Física ================= */
+const world = new C.World();
+world.gravity.set(0, -20, 0);
+world.broadphase = new C.SAPBroadphase(world);
+world.solver.iterations = 12;
+world.allowSleep = false;
+const GRAV = 20;
+const G_GROUND = 1, G_STATIC = 2, G_BALL = 4, G_TRAINER = 8, ALL = 0xFFFFFF;
+let slotFree = Array.from({length:19}, (_, i) => i);
+const groundMat = new C.Material('ground'), bodyMat = new C.Material('body');
+world.addContactMaterial(new C.ContactMaterial(groundMat, bodyMat, {friction:0.5, restitution:0}));
+world.addContactMaterial(new C.ContactMaterial(bodyMat, bodyMat, {friction:0.3, restitution:0.1}));
+const UP = new C.Vec3(0,1,0), AX = new C.Vec3(1,0,0), AZ = new C.Vec3(0,0,1);
+const groundBody = new C.Body({mass:0, shape:new C.Plane(), material:groundMat, collisionFilterGroup:G_GROUND, collisionFilterMask:ALL});
+groundBody.quaternion.setFromAxisAngle(AX, -Math.PI/2);
+groundBody.isGround = true;
+world.addBody(groundBody);
+const MAP = 40;
+for (const [nx, nz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+  const w = new C.Body({mass:0, shape:new C.Plane(), material:groundMat, collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
+  w.position.set(-nx*MAP, 0, -nz*MAP);
+  const q = new C.Quaternion(); q.setFromVectors(new C.Vec3(0,0,1), new C.Vec3(nx,0,nz)); w.quaternion.copy(q);
+  w.isStatic = true; world.addBody(w);
+}
+
+const _qc = new C.Quaternion(), _qe = new C.Quaternion(), _qa = new C.Quaternion(), _qb = new C.Quaternion(), _qt = new C.Quaternion();
+function drive(body, qT, strength, blend){
+  body.quaternion.conjugate(_qc);
+  qT.mult(_qc, _qe);
+  let x = _qe.x, y = _qe.y, z = _qe.z, w = _qe.w;
+  if (w < 0){ x = -x; y = -y; z = -z; w = -w; }
+  w = Math.min(1, w);
+  const s = Math.sqrt(1 - w*w);
+  let tx = 0, ty = 0, tz = 0;
+  if (s > 1e-4){ const k = 2*Math.acos(w)/s*strength; tx = x*k; ty = y*k; tz = z*k; }
+  const av = body.angularVelocity;
+  av.x += (tx - av.x)*blend; av.y += (ty - av.y)*blend; av.z += (tz - av.z)*blend;
+}
+function yawLocal(yaw, axis, ang, out){ _qa.setFromAxisAngle(UP, yaw); _qb.setFromAxisAngle(axis, ang); return _qa.mult(_qb, out); }
+function yawLocal2(yaw, ax1, a1, ax2, a2, out){
+  _qa.setFromAxisAngle(UP, yaw); _qb.setFromAxisAngle(ax1, a1); _qa.mult(_qb, _qt);
+  _qb.setFromAxisAngle(ax2, a2); return _qt.mult(_qb, out);
+}
+
+/* ================= Mapa ================= */
+const colliders = [];
+const ground = mesh(new T.PlaneGeometry(MAP*2+40, MAP*2+40), lam('#86cf6c'), false);
+ground.rotation.x = -Math.PI/2; scene.add(ground);
+function pathStrip(x1, z1, x2, z2, w){
+  const len = Math.hypot(x2-x1, z2-z1);
+  const p = mesh(new T.PlaneGeometry(w, len), lam('#e3cf98'), false);
+  p.rotation.x = -Math.PI/2; p.rotation.z = -Math.atan2(x2-x1, z2-z1) + Math.PI;
+  p.position.set((x1+x2)/2, 0.01, (z1+z2)/2); scene.add(p);
+}
+pathStrip(0, -10, 0, 30, 3); pathStrip(-30, 0, 30, 0, 3); pathStrip(0, -10, 0, -30, 3);
+
+const CENTER = {x:0, z:-17, w:7, d:5};
+const HEAL_SPOT = {x:0, z:-13.2};
+(function buildCenter(){
+  const g = new T.Group();
+  const walls = mesh(new T.BoxGeometry(CENTER.w, 3.2, CENTER.d), toon('#fff6ea')); walls.position.y = 1.6; g.add(walls);
+  const roof = mesh(new T.ConeGeometry(CENTER.w*0.78, 2.2, 4), toon('#ff5a36')); roof.position.y = 4.3; roof.rotation.y = Math.PI/4; roof.scale.z = CENTER.d/CENTER.w*1.1; g.add(roof);
+  const door = mesh(new T.BoxGeometry(1.6, 2.2, 0.1), toon('#6fc3ff')); door.position.set(0, 1.1, CENTER.d/2 + 0.02); g.add(door);
+  const signA = mesh(new T.BoxGeometry(1.4, 0.4, 0.12), toon('#ff5a36')); signA.position.set(0, 2.75, CENTER.d/2 + 0.08); g.add(signA);
+  const signB = mesh(new T.BoxGeometry(0.4, 1.4, 0.12), toon('#ff5a36')); signB.position.set(0, 2.75, CENTER.d/2 + 0.09); g.add(signB);
+  const mat = mesh(new T.CircleGeometry(1.1, 24), lam('#ffb4a3'), false); mat.rotation.x = -Math.PI/2; mat.position.set(HEAL_SPOT.x, 0.02, HEAL_SPOT.z); scene.add(mat);
+  g.position.set(CENTER.x, 0, CENTER.z); scene.add(g);
+  const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(CENTER.w/2, 1.6, CENTER.d/2)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
+  b.position.set(CENTER.x, 1.6, CENTER.z); b.isStatic = true; world.addBody(b);
+})();
+
+const SHOP = {x:10, z:-16, w:4.4, d:2.6};
+const SHOP_SPOT = {x:10, z:-13.6};
+const rects = [{x:CENTER.x, z:CENTER.z, hw:CENTER.w/2, hd:CENTER.d/2}, {x:SHOP.x, z:SHOP.z, hw:SHOP.w/2, hd:SHOP.d/2}];
+(function buildShop(){
+  const g = new T.Group();
+  const wood = toon('#b07a45'), dark = toon('#7a4f2a');
+  const counter = mesh(new T.BoxGeometry(SHOP.w, 1.0, SHOP.d), wood); counter.position.y = 0.5; g.add(counter);
+  const top = mesh(new T.BoxGeometry(SHOP.w + 0.2, 0.12, SHOP.d + 0.2), dark); top.position.y = 1.06; g.add(top);
+  for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){ const p = mesh(new T.CylinderGeometry(0.08, 0.08, 2.6, 6), dark); p.position.set(sx*(SHOP.w/2 - 0.1), 1.3, sz*(SHOP.d/2 - 0.1)); g.add(p); }
+  const stripes = 8;
+  for (let i = 0; i < stripes; i++){
+    const st = mesh(new T.BoxGeometry(SHOP.w/stripes + 0.01, 0.1, SHOP.d + 0.9), toon(i % 2 ? '#ffffff' : '#3aa64a'));
+    st.position.set(-SHOP.w/2 + SHOP.w/stripes*(i + 0.5), 2.7, 0.25); st.rotation.x = 0.18; g.add(st);
+  }
+  const sign = mesh(new T.BoxGeometry(1.8, 0.5, 0.1), toon('#fff6ea')); sign.position.set(0, 3.15, 0.35); g.add(sign);
+  const coin = mesh(new T.CylinderGeometry(0.17, 0.17, 0.06, 16), toon('#f2c230')); coin.rotation.x = Math.PI/2; coin.position.set(-0.6, 3.15, 0.42); g.add(coin);
+  // mercadorias no balcão
+  const fruitCols = ['#d93a4a', '#f28c28', '#f2c230', '#c9925a', '#5b3a1f'];
+  for (let i = 0; i < 9; i++){ const f = mesh(new T.SphereGeometry(rand(0.1, 0.16), 10, 8), toon(fruitCols[i % 5])); f.position.set(-SHOP.w/2 + 0.4 + i*0.45, 1.25, 0.6 + rand(-0.2, 0.2)); g.add(f); }
+  for (const sx of [-1, 1]){ const cr = mesh(new T.BoxGeometry(0.7, 0.6, 0.7), wood); cr.position.set(sx*(SHOP.w/2 + 0.6), 0.3, 0.6); cr.rotation.y = rand(-0.3, 0.3); g.add(cr); colliders.push({x:SHOP.x + sx*(SHOP.w/2 + 0.6), z:SHOP.z + 0.6, r:0.5}); }
+  g.position.set(SHOP.x, 0, SHOP.z); scene.add(g);
+  const mat = mesh(new T.CircleGeometry(1.0, 24), lam('#f6e1a0'), false); mat.rotation.x = -Math.PI/2; mat.position.set(SHOP_SPOT.x, 0.02, SHOP_SPOT.z); scene.add(mat);
+  const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(SHOP.w/2, 0.8, SHOP.d/2)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
+  b.position.set(SHOP.x, 0.8, SHOP.z); b.isStatic = true; world.addBody(b);
+})();
+
+// Arena PvP: onde os duelos entre jogadores acontecem
+const ARENA = {x:-25, z:-2, r:6.5};
+(function buildArena(){
+  const sand = mesh(new T.CircleGeometry(ARENA.r + 0.6, 48), lam('#e9d3a0'), false);
+  sand.rotation.x = -Math.PI/2; sand.position.set(ARENA.x, 0.02, ARENA.z); scene.add(sand);
+  const line = mesh(new T.RingGeometry(ARENA.r - 0.15, ARENA.r + 0.1, 64), new T.MeshBasicMaterial({color:'#d9472b', side:T.DoubleSide}), false);
+  line.rotation.x = -Math.PI/2; line.position.set(ARENA.x, 0.03, ARENA.z); scene.add(line);
+  const mid = mesh(new T.RingGeometry(0.9, 1.05, 40), new T.MeshBasicMaterial({color:'#ffffff', side:T.DoubleSide}), false);
+  mid.rotation.x = -Math.PI/2; mid.position.set(ARENA.x, 0.03, ARENA.z); scene.add(mid);
+  for (let i = 0; i < 10; i++){
+    const a = i/10*TAU, x = ARENA.x + Math.cos(a)*(ARENA.r + 1.1), z = ARENA.z + Math.sin(a)*(ARENA.r + 1.1);
+    if (Math.abs(z - ARENA.z) < 2.2 && x > ARENA.x) continue;
+    const post = mesh(new T.CylinderGeometry(0.18, 0.24, 1.3, 7), toon('#9a9488')); post.position.set(x, 0.65, z); scene.add(post);
+    const flag = mesh(new T.BoxGeometry(0.04, 0.35, 0.5), toon(i % 2 ? '#d9472b' : '#3b64d6')); flag.position.set(x, 1.45, z + 0.25); scene.add(flag);
+    colliders.push({x, z, r:0.3});
+  }
+})();
+
+const PATCHES = [
+  {x:11, z:6, r:6, lv:[2,4], pool:['javali','macaco','raposa','canguru']},
+  {x:-13, z:9, r:6, lv:[3,5], pool:['lobo','coruja','javali']},
+  {x:9, z:23, r:7, lv:[5,8], pool:['urso','guepardo','macaco','canguru']},
+  {x:-21, z:-15, r:5.5, lv:[4,6], pool:['raposa','coruja','lobo']},
+  {x:24, z:-14, r:6, lv:[6,9], pool:['rinoceronte','gorila','guepardo','urso']}
+];
+const POND = {x:-12, z:25, r:4.5};
+(function buildNature(){
+  const pond = mesh(new T.CircleGeometry(POND.r, 36), new T.MeshLambertMaterial({color:'#4fb0e8'}), false);
+  pond.rotation.x = -Math.PI/2; pond.position.set(POND.x, 0.03, POND.z); scene.add(pond);
+  const rim = mesh(new T.RingGeometry(POND.r, POND.r + 0.4, 36), lam('#d8c78f'), false); rim.rotation.x = -Math.PI/2; rim.position.set(POND.x, 0.025, POND.z); scene.add(rim);
+  colliders.push({x:POND.x, z:POND.z, r:POND.r});
+  const pb = new C.Body({mass:0, collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
+  const pq = new C.Quaternion(); pq.setFromAxisAngle(AX, -Math.PI/2);
+  pb.addShape(new C.Cylinder(POND.r, POND.r, 0.6, 16), new C.Vec3(0,0,0), pq);
+  pb.position.set(POND.x, -0.1, POND.z); pb.isStatic = true; world.addBody(pb);
+
+  const blade = new T.ConeGeometry(0.1, 0.7, 3); blade.translate(0, 0.35, 0);
+  const grassMat = new T.MeshLambertMaterial({color:'#ffffff'});
+  const dummy = new T.Object3D(), col = new T.Color();
+  for (const p of PATCHES){
+    const n = Math.round(p.r*p.r*9);
+    const im = new T.InstancedMesh(blade, grassMat, n);
+    for (let i = 0; i < n; i++){
+      const a = rand(0, TAU), d = Math.sqrt(Math.random())*p.r;
+      dummy.position.set(p.x + Math.cos(a)*d, 0, p.z + Math.sin(a)*d);
+      dummy.rotation.set(rand(-0.25,0.25), rand(0,TAU), rand(-0.25,0.25));
+      const sc = rand(0.8, 1.4); dummy.scale.set(sc, sc*rand(0.9,1.3), sc);
+      dummy.updateMatrix(); im.setMatrixAt(i, dummy.matrix);
+      col.setHSL(rand(0.27,0.33), 0.55, rand(0.28,0.4)); im.setColorAt(i, col);
+    }
+    im.receiveShadow = true; scene.add(im);
+    const patchFloor = mesh(new T.CircleGeometry(p.r + 0.3, 32), lam('#5fae4f'), false);
+    patchFloor.rotation.x = -Math.PI/2; patchFloor.position.set(p.x, 0.015, p.z); scene.add(patchFloor);
+  }
+  const blocked = (x, z, pad) => {
+    if (Math.abs(x) < 3 + pad || Math.abs(z) < 3 + pad) return true;
+    if (rects.some(r => Math.abs(x - r.x) < r.hw + 3 + pad && Math.abs(z - r.z) < r.hd + 5 + pad)) return true;
+    if (Math.hypot(x - ARENA.x, z - ARENA.z) < ARENA.r + 2.5 + pad) return true;
+    if (Math.hypot(x - POND.x, z - POND.z) < POND.r + 1.5 + pad) return true;
+    if (PATCHES.some(p => Math.hypot(x - p.x, z - p.z) < p.r + 1.5 + pad)) return true;
+    return colliders.some(c => Math.hypot(x - c.x, z - c.z) < c.r + 1.2 + pad);
+  };
+  const trunkG = new T.CylinderGeometry(0.22, 0.3, 1.4, 6), leafG = new T.IcosahedronGeometry(1, 0), rockG = new T.DodecahedronGeometry(1, 0);
+  function tree(x, z, s){
+    const g = new T.Group();
+    const tr = mesh(trunkG, toon('#8a5a3b')); tr.position.y = 0.7; g.add(tr);
+    const l1 = mesh(leafG, toon(pick(['#3f9d48','#4aaa4f','#378c3f']))); l1.position.y = 2; l1.scale.setScalar(1.25); g.add(l1);
+    const l2 = mesh(leafG, l1.material); l2.position.set(0.2, 2.9, 0.1); l2.scale.setScalar(0.85); g.add(l2);
+    g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(0, TAU); scene.add(g);
+    colliders.push({x, z, r:0.55*s});
+    const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(0.3*s, 1.5*s, 0.3*s)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
+    b.position.set(x, 1.5*s, z); b.isStatic = true; world.addBody(b);
+  }
+  function rock(x, z, s){
+    const r = mesh(rockG, toon('#a7a091')); r.position.set(x, s*0.4, z); r.scale.set(s, s*0.75, s); r.rotation.set(rand(0,1), rand(0,TAU), 0); scene.add(r);
+    colliders.push({x, z, r:s*0.9});
+    const b = new C.Body({mass:0, shape:new C.Sphere(s*0.8), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
+    b.position.set(x, s*0.2, z); b.isStatic = true; world.addBody(b);
+  }
+  for (let i = -MAP; i <= MAP; i += 3.2){ for (const [x, z] of [[i, -MAP-1],[i, MAP+1],[-MAP-1, i],[MAP+1, i]]) tree(x + rand(-0.5,0.5), z + rand(-0.5,0.5), rand(1.1, 1.5)); }
+  let placed = 0, tries = 0;
+  while (placed < 55 && tries++ < 2000){ const x = rand(-MAP+3, MAP-3), z = rand(-MAP+3, MAP-3); if (!blocked(x, z, 0)){ tree(x, z, rand(0.8, 1.3)); placed++; } }
+  placed = 0; tries = 0;
+  while (placed < 18 && tries++ < 2000){ const x = rand(-MAP+3, MAP-3), z = rand(-MAP+3, MAP-3); if (!blocked(x, z, 0)){ rock(x, z, rand(0.4, 0.9)); placed++; } }
+  const flowerG = new T.SphereGeometry(0.09, 6, 4);
+  for (let i = 0; i < 160; i++){ const x = rand(-MAP, MAP), z = rand(-MAP, MAP); if (blocked(x, z, -1)) continue; const f = mesh(flowerG, toon(pick(['#fff','#ffd23f','#ff8fb1','#b48cff'])), false); f.position.set(x, 0.08, z); scene.add(f); }
+})();
+
+/* ================= Treinador ================= */
+const trainer = {pos:new T.Vector3(0, 0, -11), yaw:Math.PI, walk:0, moving:false, throwT:0};
+const trLegG = new T.CylinderGeometry(0.11, 0.1, 0.6, 8); trLegG.translate(0, -0.3, 0);
+const trArmG = new T.CylinderGeometry(0.08, 0.07, 0.55, 8); trArmG.translate(0, -0.27, 0);
+function makeTrainerModel(jacket){
+  const g = new T.Group();
+  const skin = toon('#f2c49b'), red = toon(jacket), blue = toon('#2f4f9e'), dark = toon('#2a2140');
+  const legs = [-1, 1].map(s => { const l = mesh(trLegG, blue); l.position.set(s*0.14, 0.62, 0); g.add(l); return l; });
+  const body = mesh(new T.CylinderGeometry(0.26, 0.3, 0.7, 10), red); body.position.y = 0.95; g.add(body);
+  const pack = mesh(new T.BoxGeometry(0.38, 0.45, 0.2), toon('#f2b632')); pack.position.set(0, 1.0, -0.27); g.add(pack);
+  const arms = [-1, 1].map(s => { const a = mesh(trArmG, red); a.position.set(s*0.34, 1.25, 0); g.add(a); return a; });
+  const head = mesh(new T.SphereGeometry(0.3, 16, 12), skin); head.position.y = 1.55; g.add(head);
+  const cap = mesh(new T.SphereGeometry(0.31, 16, 8, 0, TAU, 0, Math.PI/2), red); cap.position.y = 1.58; g.add(cap);
+  const brim = mesh(new T.BoxGeometry(0.42, 0.04, 0.3), red); brim.position.set(0, 1.6, 0.27); g.add(brim);
+  for (const s of [-1, 1]){ const e = mesh(new T.SphereGeometry(0.045, 8, 6), dark, false); e.position.set(s*0.1, 1.53, 0.27); g.add(e); }
+  scene.add(g);
+  return {g, legs, arms};
+}
+(function buildTrainer(){
+  const m = makeTrainerModel('#e8412b');
+  trainer.mesh = m.g; trainer.legs = m.legs; trainer.arms = m.arms;
+  trainer.body = new C.Body({mass:0, type:C.Body.KINEMATIC, shape:new C.Box(new C.Vec3(0.3, 0.8, 0.3)), collisionFilterGroup:G_TRAINER, collisionFilterMask:ALL & ~G_BALL & ~G_GROUND & ~G_STATIC});
+  trainer.body.position.set(trainer.pos.x, 0.8, trainer.pos.z); world.addBody(trainer.body);
+})();
+const trainerFwd = () => new T.Vector3(Math.sin(trainer.yaw), 0, Math.cos(trainer.yaw));
+function moveTrainer(dx, dz){
+  let x = clamp(trainer.pos.x + dx, -MAP + 1, MAP - 1), z = clamp(trainer.pos.z + dz, -MAP + 1, MAP - 1);
+  for (const c of colliders){ const ex = x - c.x, ez = z - c.z, d = Math.hypot(ex, ez), m = c.r + 0.35; if (d < m && d > 1e-4){ x = c.x + ex/d*m; z = c.z + ez/d*m; } }
+  for (const r of rects){
+    const hw = r.hw + 0.35, hd = r.hd + 0.35;
+    if (Math.abs(x - r.x) < hw && Math.abs(z - r.z) < hd){
+      const px = hw - Math.abs(x - r.x), pz = hd - Math.abs(z - r.z);
+      if (px < pz) x = r.x + Math.sign(x - r.x)*hw; else z = r.z + Math.sign(z - r.z)*hd;
+    }
+  }
+  trainer.pos.x = x; trainer.pos.z = z;
+}
+
+/* ================= Visual dos animais ================= */
+function add(parent, geo, mat, p, s, r, shadow=false){
+  const m = mesh(geo, mat, shadow);
+  m.position.set(p[0], p[1], p[2]); m.scale.set(s[0], s[1], s[2]);
+  if (r) m.rotation.set(r[0], r[1], r[2]);
+  parent.add(m); return m;
+}
+function makeEyes(head, r, x, y, z, size, iris){
+  const eyes = new T.Group(), xs = new T.Group();
+  const ink = toon('#16131c');
+  for (const sx of [-1, 1]){
+    if (iris){
+      add(eyes, GS, toon(iris), [sx*x*r, y*r, z*r], [size*r, size*r, size*r*0.5]);
+      add(eyes, GS, ink, [sx*x*r, y*r, (z + size*0.45)*r], [size*0.55*r, size*0.55*r, size*0.3*r]);
+    } else {
+      add(eyes, GS, ink, [sx*x*r, y*r, z*r], [size*r, size*r, size*r*0.7]);
+    }
+    add(eyes, GS, toon('#ffffff'), [sx*x*r + size*0.3*r, (y + size*0.35)*r, (z + size*0.6)*r], [size*0.3*r, size*0.3*r, size*0.2*r]);
+    for (const rr of [0.8, -0.8]) add(xs, GB, ink, [sx*x*r, y*r, (z + 0.05)*r], [size*2.4*r, size*0.5*r, size*0.5*r], [0, 0, rr]);
+  }
+  xs.visible = false; head.add(eyes, xs);
+  return {eyes, xs};
+}
+function makeCreatureMeshes(c){
+  const sp = c.sp, d = c.d, s = c.s;
+  const body = toon(sp.color), dark = toon(sp.dark), light = toon(sp.belly), black = toon('#16131c'), ivory = toon('#efe6cf'), pink = toon('#e7a0a0');
+  const head = new T.Group(), torso = new T.Group();
+  const r = d.hr;
+  add(head, GS, body, [0,0,0], [r, r, r], null, true);
+  let eyeCfg = [0.35, 0.18, 0.84, 0.11, null];
+  let tail = null;
+  const tailGroup = (x, y, z) => { const g = new T.Group(); g.position.set(x, y, z); torso.add(g); return g; };
+  if (c.plan === 'biped'){
+    add(torso, GS, body, [0,0,0], [d.tw*1.2, d.th*1.12, d.td*1.3], null, true);
+    add(torso, GS, light, [0, -d.th*0.08, d.td*0.72], [d.tw*0.82, d.th*0.78, d.td*0.62]);
+  } else {
+    add(torso, GS, body, [0,0,0], [d.tw*1.2, d.th*1.25, d.tl*1.15], null, true);
+    add(torso, GS, light, [0, -d.th*0.45, d.tl*0.1], [d.tw*0.85, d.th*0.7, d.tl*0.85]);
+  }
+  switch (sp.feat){
+    case 'bear':
+      for (const sx of [-1, 1]){ add(head, GS, body, [sx*0.62*r, 0.72*r, -0.05*r], [0.3*r, 0.3*r, 0.18*r], null, true); add(head, GS, light, [sx*0.62*r, 0.72*r, 0.05*r], [0.17*r, 0.17*r, 0.08*r]); }
+      add(head, GS, light, [0, -0.22*r, 0.78*r], [0.42*r, 0.32*r, 0.36*r]);
+      add(head, GS, black, [0, -0.1*r, 1.1*r], [0.14*r, 0.1*r, 0.09*r]);
+      add(torso, GS, body, [0, -d.th*0.6, -d.td*1.15], [d.tw*0.3, d.tw*0.3, d.tw*0.3]);
+      eyeCfg = [0.33, 0.2, 0.84, 0.1];
+      break;
+    case 'gorilla':
+      add(head, GS, body, [0, 0.45*r, -0.15*r], [0.85*r, 0.75*r, 0.85*r], null, true);
+      add(head, GS, light, [0, -0.08*r, 0.6*r], [0.62*r, 0.62*r, 0.45*r]);
+      add(head, GB, dark, [0, 0.28*r, 0.9*r], [0.95*r, 0.16*r, 0.22*r]);
+      for (const sx of [-1, 1]){ add(head, GS, black, [sx*0.1*r, -0.2*r, 1.02*r], [0.06*r, 0.05*r, 0.04*r]); add(head, GS, dark, [sx*0.92*r, 0.05*r, 0], [0.15*r, 0.2*r, 0.1*r]); }
+      eyeCfg = [0.25, 0.12, 0.95, 0.09];
+      break;
+    case 'kangaroo':
+      for (const sx of [-1, 1]){ add(head, GS, body, [sx*0.35*r, 1.0*r, -0.15*r], [0.16*r, 0.5*r, 0.08*r], [0, 0, -sx*0.25], true); add(head, GS, light, [sx*0.35*r, 1.0*r, -0.08*r], [0.09*r, 0.38*r, 0.04*r], [0, 0, -sx*0.25]); }
+      add(head, GS, body, [0, -0.15*r, 0.7*r], [0.45*r, 0.4*r, 0.55*r], null, true);
+      add(head, GS, black, [0, -0.06*r, 1.22*r], [0.12*r, 0.09*r, 0.08*r]);
+      tail = tailGroup(0, -d.th*0.7, -d.td*0.9);
+      add(tail, GC, body, [0, -d.th*0.9, -d.th*0.9], [d.tw*0.35, d.th*2.6, d.tw*0.35], [-2.35, 0, 0], true);
+      eyeCfg = [0.35, 0.2, 0.75, 0.1];
+      break;
+    case 'monkey':
+      add(head, GS, light, [0, -0.08*r, 0.6*r], [0.62*r, 0.62*r, 0.45*r]);
+      for (const sx of [-1, 1]) add(head, GS, light, [sx*0.95*r, 0.05*r, 0], [0.26*r, 0.3*r, 0.1*r], null, true);
+      add(head, GS, black, [0, -0.25*r, 1.0*r], [0.18*r, 0.05*r, 0.05*r]);
+      tail = tailGroup(0, -d.th*0.4, -d.td*1.0);
+      add(tail, GT, body, [0, 0, -d.tw*0.9], [d.tw*0.9, d.tw*0.9, d.tw*0.9], [0, Math.PI/2, 0], true);
+      eyeCfg = [0.22, 0.12, 0.98, 0.1];
+      break;
+    case 'owl':
+      add(head, GS, light, [0, 0, 0.5*r], [0.82*r, 0.75*r, 0.55*r]);
+      add(head, GC, toon('#e8a33a'), [0, -0.18*r, 1.08*r], [0.1*r, 0.28*r, 0.1*r], [1.9, 0, 0]);
+      for (const sx of [-1, 1]) add(head, GC, dark, [sx*0.5*r, 0.88*r, 0], [0.13*r, 0.45*r, 0.13*r], [0, 0, -sx*0.4], true);
+      add(torso, GS, dark, [0, -d.th*0.1, -d.td*0.6], [d.tw*1.0, d.th*1.0, d.td*0.7]);
+      eyeCfg = [0.33, 0.1, 0.9, 0.24, '#ffc928'];
+      break;
+    case 'rhino':
+      add(head, GS, body, [0, -0.15*r, 0.85*r], [0.6*r, 0.5*r, 0.8*r], null, true);
+      add(head, GC, ivory, [0, 0.42*r, 1.25*r], [0.2*r, 0.8*r, 0.2*r], [0.35, 0, 0], true);
+      add(head, GC, ivory, [0, 0.32*r, 0.78*r], [0.13*r, 0.4*r, 0.13*r], [0.25, 0, 0]);
+      for (const sx of [-1, 1]) add(head, GC, body, [sx*0.45*r, 0.78*r, -0.3*r], [0.12*r, 0.35*r, 0.08*r], [0, 0, -sx*0.3], true);
+      tail = tailGroup(0, d.th*0.3, -d.tl*1.05);
+      add(tail, GY, dark, [0, -d.th*0.4, -0.02], [0.025*s, d.th*0.9, 0.025*s], [0.3, 0, 0]);
+      eyeCfg = [0.55, 0.15, 0.55, 0.08];
+      break;
+    case 'boar':
+      add(head, GY, body, [0, -0.1*r, 0.95*r], [0.3*r, 0.7*r, 0.3*r], [Math.PI/2, 0, 0], true);
+      add(head, GY, pink, [0, -0.1*r, 1.32*r], [0.28*r, 0.06*r, 0.28*r], [Math.PI/2, 0, 0]);
+      for (const sx of [-1, 1]){
+        add(head, GC, ivory, [sx*0.28*r, -0.1*r, 1.08*r], [0.06*r, 0.35*r, 0.06*r], [0.4, 0, -sx*0.3]);
+        add(head, GC, body, [sx*0.45*r, 0.8*r, -0.15*r], [0.14*r, 0.38*r, 0.08*r], [-0.2, 0, -sx*0.35], true);
+      }
+      for (let i = 0; i < 6; i++) add(torso, GC, dark, [0, d.th*1.15, d.tl*(0.7 - i*0.28)], [0.05*s, 0.14*s, 0.05*s], [-0.3, 0, 0]);
+      tail = tailGroup(0, d.th*0.3, -d.tl*1.05);
+      add(tail, GY, dark, [0, -d.th*0.35, -0.02], [0.02*s, d.th*0.7, 0.02*s], [0.3, 0, 0]);
+      eyeCfg = [0.45, 0.28, 0.6, 0.08];
+      break;
+    case 'wolf':
+      add(head, GS, body, [0, -0.18*r, 0.85*r], [0.38*r, 0.32*r, 0.75*r], null, true);
+      add(head, GS, light, [0, -0.32*r, 0.8*r], [0.3*r, 0.18*r, 0.6*r]);
+      add(head, GS, black, [0, -0.08*r, 1.56*r], [0.1*r, 0.09*r, 0.08*r]);
+      for (const sx of [-1, 1]) add(head, GC, body, [sx*0.45*r, 0.88*r, -0.1*r], [0.18*r, 0.55*r, 0.1*r], [0, 0, -sx*0.25], true);
+      tail = tailGroup(0, d.th*0.4, -d.tl*1.0);
+      add(tail, GS, body, [0, -d.th*0.4, -d.tl*0.5], [d.tw*0.4, d.tw*0.4, d.tl*0.6], [-0.6, 0, 0], true);
+      add(tail, GS, light, [0, -d.th*0.95, -d.tl*0.95], [d.tw*0.25, d.tw*0.25, d.tw*0.35], [-0.6, 0, 0]);
+      eyeCfg = [0.38, 0.25, 0.72, 0.09, '#e8c440'];
+      break;
+    case 'cheetah':
+      add(head, GS, light, [0, -0.2*r, 0.75*r], [0.38*r, 0.28*r, 0.35*r]);
+      add(head, GS, black, [0, -0.1*r, 1.05*r], [0.1*r, 0.07*r, 0.06*r]);
+      for (const sx of [-1, 1]){ add(head, GB, black, [sx*0.3*r, -0.15*r, 0.88*r], [0.05*r, 0.4*r, 0.05*r], [0, 0, sx*0.15]); add(head, GS, body, [sx*0.55*r, 0.7*r, -0.1*r], [0.18*r, 0.16*r, 0.08*r], null, true); }
+      for (let i = 0; i < 26; i++){
+        const u = rand(-0.85, 0.85), a = rand(-1.7, 1.7), k = Math.sqrt(1 - u*u)*1.02;
+        add(torso, GS, black, [Math.sin(a)*d.tw*1.2*k, Math.cos(a)*d.th*1.25*k, u*d.tl*1.15], [0.035*s, 0.035*s, 0.035*s]);
+      }
+      tail = tailGroup(0, d.th*0.3, -d.tl*1.05);
+      add(tail, GY, body, [0, -d.th*0.6, -d.tl*0.5], [0.035*s, d.tl*1.1, 0.035*s], [-1.0, 0, 0], true);
+      add(tail, GS, black, [0, -d.th*1.15, -d.tl*0.95], [0.05*s, 0.05*s, 0.05*s]);
+      eyeCfg = [0.35, 0.2, 0.82, 0.09, '#d9a000'];
+      break;
+    case 'fox':
+      for (const sx of [-1, 1]){
+        add(head, GC, body, [sx*0.42*r, 0.92*r, -0.1*r], [0.24*r, 0.75*r, 0.1*r], [0, 0, -sx*0.25], true);
+        add(head, GC, black, [sx*0.5*r, 1.25*r, -0.1*r], [0.1*r, 0.25*r, 0.05*r], [0, 0, -sx*0.25]);
+      }
+      add(head, GC, body, [0, -0.15*r, 1.05*r], [0.3*r, 0.8*r, 0.3*r], [Math.PI/2, 0, 0], true);
+      add(head, GS, light, [0, -0.32*r, 0.6*r], [0.5*r, 0.25*r, 0.45*r]);
+      add(head, GS, black, [0, -0.15*r, 1.45*r], [0.08*r, 0.07*r, 0.06*r]);
+      tail = tailGroup(0, d.th*0.3, -d.tl*1.0);
+      add(tail, GS, body, [0, -d.th*0.3, -d.tl*0.65], [d.tw*0.55, d.tw*0.55, d.tl*0.75], [-0.4, 0, 0], true);
+      add(tail, GS, light, [0, -d.th*0.75, -d.tl*1.3], [d.tw*0.35, d.tw*0.35, d.tw*0.45], [-0.4, 0, 0]);
+      eyeCfg = [0.38, 0.22, 0.75, 0.09, '#f2b632'];
+      break;
+  }
+  const ey = makeEyes(head, r, eyeCfg[0], eyeCfg[1], eyeCfg[2], eyeCfg[3], eyeCfg[4]);
+  const limb = (rad, half, tip, mat) => {
+    const g = new T.Group();
+    add(g, GY, mat, [0,0,0], [rad, half*2, rad], null, true);
+    add(g, GS, mat, [0, half, 0], [rad, rad, rad], null, true);
+    if (tip){ g.add(tip); tip.position.y = -half; }
+    return g;
+  };
+  let list;
+  if (c.plan === 'biped'){
+    const arms = [0, 1].map(() => {
+      if (sp.feat === 'owl'){ const g = new T.Group(); add(g, GS, dark, [0, -d.al*0.1, -d.ar*0.5], [d.ar*0.7, d.al*1.15, d.ar*3.2], null, true); return g; }
+      const fist = mesh(GS, sp.feat === 'gorilla' ? dark : body); fist.scale.setScalar(d.ar*1.45);
+      return limb(d.ar, d.al, fist, body);
+    });
+    const legs = [0, 1].map(() => {
+      const foot = mesh(GS, sp.feat === 'owl' ? toon('#e8a33a') : dark);
+      const big = sp.feat === 'kangaroo' ? 1.7 : 1;
+      foot.scale.set(d.lr*1.3, d.lr*0.75, d.lr*1.8*big);
+      const g = limb(d.lr, d.ll, foot, sp.feat === 'owl' ? toon('#e8a33a') : body); foot.position.z = d.lr*0.5*big; return g;
+    });
+    list = [legs[0], legs[1], torso, arms[0], arms[1], head];
+  } else {
+    const legs = [0, 1, 2, 3].map(() => { const paw = mesh(GS, dark); paw.scale.set(d.lr*1.25, d.lr*0.7, d.lr*1.5); const g = limb(d.lr, d.ll, paw, body); paw.position.z = d.lr*0.3; return g; });
+    list = [...legs, torso, head];
+  }
+  list.forEach(m => scene.add(m));
+  c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.tail = tail;
+}
+
+/* ================= Animais (ragdoll ativo) ================= */
+let creatures = [];
+function makeCreature(member, x, z, role){
+  const sp = SPECIES[member.species];
+  const st = stats(member);
+  const s = sp.size*(1 + 0.012*(member.level - 1));
+  const slot = slotFree.shift(); const bit = 16 << slot; const mask = ALL & ~bit;
+  const m = 1 + (st.str - 10)*0.02;
+  const mk = (shape, mass, px, py, pz) => {
+    const b = new C.Body({mass:mass*m, shape, position:new C.Vec3(px, py, pz), material:bodyMat, linearDamping:0.05, angularDamping:0.35, collisionFilterGroup:bit, collisionFilterMask:mask});
+    world.addBody(b); return b;
+  };
+  const P = (a, pa, b, pb) => new C.PointToPointConstraint(a, new C.Vec3(...pa), b, new C.Vec3(...pb), 1e4);
+  let d, H, parts, joints, torso, head, arms = [], legs, kinds, grabbers, strikers, reach;
+  if (sp.plan === 'biped'){
+    d = {tw:0.32*s, th:0.36*s, td:0.24*s, hr:0.32*s*sp.head, al:0.28*s*sp.arm, ar:0.085*s, ll:0.25*s*sp.leg, lr:0.11*s};
+    H = 2*d.ll + d.th;
+    const y = H + 0.05;
+    torso = mk(new C.Box(new C.Vec3(d.tw, d.th, d.td)), 3, x, y, z);
+    head = mk(new C.Sphere(d.hr), 1, x, y + d.th + d.hr*0.85, z);
+    const shX = d.tw + d.ar*0.8, shY = d.th*0.65;
+    const armL = mk(new C.Box(new C.Vec3(d.ar, d.al, d.ar)), 0.55, x - shX, y + shY - d.al, z);
+    const armR = mk(new C.Box(new C.Vec3(d.ar, d.al, d.ar)), 0.55, x + shX, y + shY - d.al, z);
+    const hipX = d.tw*0.5;
+    const legL = mk(new C.Box(new C.Vec3(d.lr, d.ll, d.lr)), 0.8, x - hipX, y - d.th - d.ll, z);
+    const legR = mk(new C.Box(new C.Vec3(d.lr, d.ll, d.lr)), 0.8, x + hipX, y - d.th - d.ll, z);
+    joints = [
+      P(torso, [0, d.th, 0], head, [0, -d.hr*0.85, 0]),
+      P(torso, [-shX, shY, 0], armL, [0, d.al, 0]), P(torso, [shX, shY, 0], armR, [0, d.al, 0]),
+      P(torso, [-hipX, -d.th, 0], legL, [0, d.ll, 0]), P(torso, [hipX, -d.th, 0], legR, [0, d.ll, 0])
+    ];
+    arms = [armL, armR]; legs = [legL, legR];
+    armL.tip = new C.Vec3(0, -d.al, 0); armR.tip = new C.Vec3(0, -d.al, 0);
+    parts = [legL, legR, torso, armL, armR, head];
+    kinds = ['leg','leg','torso','arm','arm','head'];
+    grabbers = arms; strikers = arms;
+    reach = d.tw + d.al*2 + 0.3;
+  } else {
+    d = {tw:0.26*s, th:0.22*s, tl:0.45*s, hr:0.24*s*sp.head, ll:0.2*s*sp.leg, lr:0.075*s};
+    H = 2*d.ll + d.th*0.8;
+    const y = H + 0.05;
+    torso = mk(new C.Box(new C.Vec3(d.tw, d.th, d.tl)), 4, x, y, z);
+    const hy = d.th*0.5 + d.hr*0.3, hz = d.tl*0.95 + d.hr*0.8;
+    head = mk(new C.Sphere(d.hr), 1, x, y + hy, z + hz);
+    legs = [[-1,1],[1,1],[-1,-1],[1,-1]].map(([sx, sz]) => mk(new C.Box(new C.Vec3(d.lr, d.ll, d.lr)), 0.6, x + sx*d.tw*0.65, y - d.th*0.8 - d.ll, z + sz*d.tl*0.72));
+    joints = [P(torso, [0, d.th*0.5, d.tl*0.95], head, [0, -d.hr*0.3, -d.hr*0.8])];
+    [[-1,1],[1,1],[-1,-1],[1,-1]].forEach(([sx, sz], i) => joints.push(P(torso, [sx*d.tw*0.65, -d.th*0.8, sz*d.tl*0.72], legs[i], [0, d.ll, 0])));
+    head.tip = new C.Vec3(0, -d.hr*0.2, d.hr*1.5);
+    parts = [...legs, torso, head];
+    kinds = ['leg','leg','leg','leg','torso','head'];
+    grabbers = [head]; strikers = [head];
+    reach = d.tl + d.hr*2.2 + 0.35;
+  }
+  joints.forEach(j => world.addConstraint(j));
+  const c = {
+    member, sp, st, s, d, H, plan:sp.plan, role, slot, bit, parts, joints, torso, head, arms, legs, grabbers, strikers, reach,
+    power:st.power, defense:st.defense,
+    yaw: rand(0, TAU), grounded:false, ko:0, stun:0, wobble:0, confused:0, fainted:false, removed:false, dead:false,
+    punchT:[0,0], punchSide:0, biteT:0, atkCd:0, attackT:0, hitCd:0, envCd:0, thrownT:0, thrownBy:null,
+    special:null, specialT:0, specialCd:1, specialPhase:0, specialClock:0,
+    grabHeld:false, grabs:[], grabT:0, grabCd:0, prevLift:false, jumpCd:0, walk:0,
+    input:{}, ai:{t:0, mode:'idle', grabFor:0, target:null}, fade:1, patch:null, cool:0
+  };
+  c.totalMass = parts.reduce((a, p) => a + p.mass, 0);
+  parts.forEach((p, i) => { p.owner = c; p.kind = kinds[i]; p.addEventListener('collide', e => onCollide(p, e.body)); });
+  makeCreatureMeshes(c);
+  creatures.push(c);
+  syncCreature(c);
+  return c;
+}
+function hideCreature(c){
+  if (c.removed) return;
+  releaseGrabs(c, false);
+  for (const o of creatures) if (o !== c && o.grabs.some(g => g.owner === c)) releaseGrabs(o, false);
+  c.joints.forEach(j => world.removeConstraint(j));
+  c.parts.forEach(p => world.removeBody(p));
+  c.meshes.forEach(m => m.visible = false);
+  c.removed = true;
+}
+function showCreature(c, x, y, z){
+  const t = c.torso.position, ox = x - t.x, oy = y - t.y, oz = z - t.z;
+  for (const p of c.parts){ p.position.x += ox; p.position.y += oy; p.position.z += oz; p.velocity.set(0, 3, 0); p.angularVelocity.set(0, 0, 0); world.addBody(p); }
+  c.joints.forEach(j => world.addConstraint(j));
+  c.meshes.forEach(m => m.visible = true);
+  c.removed = false; c.ko = 0; c.stun = 0; c.wobble = 0.6;
+}
+function destroyCreature(c){
+  hideCreature(c);
+  c.meshes.forEach(m => scene.remove(m));
+  slotFree.push(c.slot); c.dead = true;
+  creatures = creatures.filter(o => o !== c);
+}
+function syncCreature(c){
+  if (c.role !== 'puppet') c.parts.forEach((p, i) => { const m = c.meshes[i]; m.position.copy(p.position); m.quaternion.copy(p.quaternion); });
+  const ko = c.ko > 0 || c.fainted;
+  c.eyes.visible = !ko; c.xeyes.visible = ko;
+  if (c.tail){
+    const hs = Math.hypot(c.torso.velocity.x, c.torso.velocity.z);
+    c.tail.rotation.y = Math.sin(clock*(hs > 0.5 ? 14 : 5) + c.slot)*(ko ? 0 : hs > 0.5 ? 0.5 : 0.25);
+  }
+  if (c.fade < 1) c.meshes.forEach(m => m.scale.setScalar(Math.max(0.01, c.fade)));
+}
+const fwdOf = c => ({x:Math.sin(c.yaw), z:Math.cos(c.yaw)});
+const tipWorld = b => { const out = new C.Vec3(); b.pointToWorldFrame(b.tip, out); return out; };
+
+const _qy = new C.Quaternion(), _ql = new C.Quaternion(), _qh = new C.Quaternion();
+function updateCreature(c, dt){
+  c.punchT[0] -= dt; c.punchT[1] -= dt; c.biteT -= dt; c.atkCd -= dt; c.attackT -= dt; c.hitCd -= dt; c.envCd -= dt; c.thrownT -= dt;
+  c.specialCd -= dt; c.specialT -= dt; c.grabCd -= dt; c.jumpCd -= dt; c.wobble -= dt; c.cool -= dt;
+  c.stun = Math.max(0, c.stun - 9*dt);
+  if (c.confused > 0){ c.confused -= dt; if (Math.floor(c.confused*1.5) !== Math.floor((c.confused + dt)*1.5) && !c.removed) floatText(c.head.position, '?', '#c58bff', 28); }
+  if (c.removed) return;
+  if (c.ko > 0){ c.ko -= dt; if (c.ko <= 0) toast(`${c.member.nick} se levantou!`); }
+  const t = c.torso, inp = c.input || {};
+  c.grounded = t.position.y < c.H + 0.3*c.s;
+  if (c.ko > 0 || c.fainted){ if (c.grabs.length) releaseGrabs(c, false); c.grabHeld = false; return; }
+
+  let bal = c.wobble > 0 ? 0.3 : 1;
+  let mx = inp.mx || 0, mz = inp.mz || 0;
+  if (c.confused > 0){ const a = Math.sin(clock*2.3 + c.slot)*2.5; const cs = Math.cos(a), sn = Math.sin(a); [mx, mz] = [mx*cs - mz*sn, mx*sn + mz*cs]; bal *= 0.8; }
+  const mag = Math.hypot(mx, mz);
+  if (inp.face && c.confused <= 0){ const dx = inp.face.x - t.position.x, dz = inp.face.z - t.position.z; if (dx*dx + dz*dz > 0.04) c.yaw = lerpAngle(c.yaw, Math.atan2(dx, dz), 0.18); }
+  else if (mag > 0.1) c.yaw = lerpAngle(c.yaw, Math.atan2(mx, mz), 0.15);
+  _qy.setFromAxisAngle(UP, c.yaw);
+  const f = fwdOf(c);
+
+  // fica em pé: mola vertical + torque para ficar reto
+  if (c.grounded){
+    const err = (c.H + 0.03) - t.position.y;
+    const fy = c.totalMass*(GRAV*0.95*bal + 140*err*bal - 12*t.velocity.y*bal);
+    if (fy > 0) t.force.y += fy;
+  }
+  drive(t, _qy, (c.plan === 'quad' ? 16 : 14)*bal, c.grounded ? 0.35 : 0.15);
+
+  // andar
+  const spd = 4.6*c.st.speed;
+  const k = c.grounded ? 9 : 2;
+  const brake = mag > 0.05 ? 1 : 0.5;
+  t.force.x += (mx*spd - t.velocity.x)*c.totalMass*k*brake;
+  t.force.z += (mz*spd - t.velocity.z)*c.totalMass*k*brake;
+
+  const hs = Math.hypot(t.velocity.x, t.velocity.z);
+  const stepping = c.grounded && hs > 0.5;
+  if (stepping) c.walk += hs*dt*(c.plan === 'quad' ? 4.2 : 3.4)/c.s;
+  const sw = stepping ? Math.sin(c.walk)*Math.min(0.75, hs*0.17) : 0;
+  const kicking = c.special === 'kick' && c.specialT > 0;
+  if (c.plan === 'quad'){
+    const signs = [1, -1, -1, 1];
+    c.legs.forEach((L, i) => { yawLocal(c.yaw, AX, sw*signs[i], _ql); drive(L, _ql, 14*bal, 0.4); });
+  } else {
+    c.legs.forEach((L, i) => { yawLocal(c.yaw, AX, kicking ? -1.4 : (i ? sw : -sw), _ql); drive(L, _ql, kicking ? 22 : 13*bal, kicking ? 0.6 : 0.4); });
+  }
+
+  if (inp.jump && c.grounded && c.jumpCd <= 0 && !c.grabs.length){
+    c.parts.forEach(p => { p.velocity.y = Math.max(p.velocity.y, c.st.jump); });
+    c.jumpCd = 0.5;
+  }
+  // ataque básico: soco (bípede) ou mordida (quadrúpede)
+  if (inp.punch && c.atkCd <= 0 && !c.grabHeld){
+    c.atkCd = c.st.atkCd; c.attackT = 0.3;
+    if (c.plan === 'biped'){
+      const i = c.punchSide; c.punchSide ^= 1; c.punchT[i] = 0.22;
+      const a = c.arms[i]; a.velocity.x += f.x*10*c.power; a.velocity.z += f.z*10*c.power; a.velocity.y += 1.5;
+      t.velocity.x += f.x*1.5; t.velocity.z += f.z*1.5;
+    } else {
+      c.biteT = 0.25;
+      c.head.velocity.x += f.x*9*c.power; c.head.velocity.z += f.z*9*c.power;
+      t.velocity.x += f.x*2.5; t.velocity.z += f.z*2.5;
+    }
+  }
+
+  // agarrar (mãos ou boca)
+  const wantGrab = !!inp.grab && c.grabCd <= 0;
+  if (!wantGrab && c.grabs.length) releaseGrabs(c, c.prevLift);
+  c.grabHeld = wantGrab;
+  if (c.grabs.length){
+    c.grabT += dt;
+    const maxHold = 1.8 + c.st.str*0.04;
+    if (c.grabT > maxHold){ releaseGrabs(c, false); c.grabCd = 0.8; toast('Escapou do agarrão!'); }
+    else if (inp.lift) for (const g of c.grabs) if (g.owner && !g.owner.removed) g.part.force.y += g.owner.totalMass*GRAV*(c.plan === 'quad' ? 0.35 : 0.45)*Math.min(1.3, c.power);
+  }
+  c.prevLift = !!(inp.lift && c.grabs.length);
+
+  if (inp.special && c.specialCd <= 0) doSpecial(c);
+  updateSpecial(c, dt);
+
+  // cabeça
+  if (c.plan === 'quad'){
+    const pitch = c.biteT > 0 ? 0.35 : c.grabHeld ? (inp.lift && c.grabs.length ? -0.5 : 0.25) : 0.05;
+    yawLocal(c.yaw, AX, pitch, _qh); drive(c.head, _qh, 14, 0.45);
+  } else drive(c.head, _qy, 14, 0.4);
+
+  // braços (bípede)
+  c.arms.forEach((A, i) => {
+    const side = i ? 1 : -1;
+    let str = 4, bl = 0.15;
+    if (c.punchT[i] > 0){ yawLocal(c.yaw, AX, -Math.PI/2, _ql); str = 24; bl = 0.6; }
+    else if (c.grabHeld){ yawLocal2(c.yaw, AX, inp.lift && c.grabs.length ? -Math.PI*0.95 : -Math.PI/2 + 0.1, AZ, side*0.12, _ql); str = 14; bl = 0.4; }
+    else if (c.sp.feat === 'owl'){ yawLocal2(c.yaw, AX, 0.1, AZ, side*(stepping || !c.grounded ? 0.5 + Math.sin(clock*18)*0.4 : 0.15), _ql); str = 8; bl = 0.3; }
+    else yawLocal2(c.yaw, AX, -0.15 + (stepping ? (i ? -sw : sw)*0.6 : 0), AZ, side*0.2, _ql);
+    drive(A, _ql, str*Math.max(bal, 0.5), bl);
+  });
+}
+const dist2 = (a, b) => Math.hypot(a.torso.position.x - b.torso.position.x, a.torso.position.z - b.torso.position.z);
+function launch(c, from, hor, up){
+  const dx = c.torso.position.x - from.x, dz = c.torso.position.z - from.z, l = Math.hypot(dx, dz) || 1;
+  c.parts.forEach(p => { p.velocity.x += dx/l*hor; p.velocity.z += dz/l*hor; p.velocity.y += up; });
+  c.wobble = 0.8;
+}
+
+/* agarrar */
+function tryGrab(c, part, other, at){
+  if (c.grabCd > 0 || c.grabs.length >= c.grabbers.length || c.grabs.some(g => g.arm === part)) return;
+  const ow = other.owner;
+  if (!ow || ow === c || ow.removed) return;
+  const pivB = new C.Vec3(); other.pointToLocalFrame(at, pivB);
+  const con = new C.PointToPointConstraint(part, part.tip, other, pivB, 300 + c.st.str*12);
+  world.addConstraint(con);
+  if (!c.grabs.length) c.grabT = 0;
+  c.grabs.push({arm:part, con, part:other, owner:ow});
+  if (c.grabs.length === 1) toast(c.plan === 'quad' ? `${c.member.nick} mordeu e segurou ${ow.member.nick}!` : `${c.member.nick} agarrou ${ow.member.nick}!`);
+}
+function releaseGrabs(c, fling){
+  const f = fwdOf(c);
+  for (const g of c.grabs){
+    world.removeConstraint(g.con);
+    if (fling && g.owner && !g.owner.removed){
+      const k = Math.min(1.4, c.power);
+      g.owner.parts.forEach(p => { p.velocity.x += f.x*9*k; p.velocity.z += f.z*9*k; p.velocity.y += 6*k; });
+      g.owner.wobble = 1; g.owner.thrownT = 1.4; g.owner.thrownBy = c;
+    }
+  }
+  if (fling && c.grabs.some(g => g.owner)) toast('Arremessou!');
+  c.grabs = [];
+}
+
+/* especiais */
+function doSpecial(c){
+  const o = opponentOf(c);
+  c.special = c.sp.special; c.specialCd = c.st.specCd; c.specialClock = 0; c.specialPhase = 0;
+  toast(`${c.member.nick} usou ${c.sp.specialName}!`);
+  const t = c.torso, f = fwdOf(c), sp = c.st.specPow;
+  const toOpp = () => { if (!o) return {x:f.x, z:f.z, d:3}; const dx = o.torso.position.x - t.position.x, dz = o.torso.position.z - t.position.z, d = Math.hypot(dx, dz) || 1; return {x:dx/d, z:dz/d, d}; };
+  switch (c.special){
+    case 'dash': c.specialT = 0.5; c.parts.forEach(p => p.velocity.set(f.x*15, 2.5, f.z*15)); break;
+    case 'slam': c.specialT = 1.4; c.parts.forEach(p => p.velocity.y = 12); break;
+    case 'quake':
+      c.specialT = 0.4; shake(0.45); shockwave(t.position.x, t.position.z, '#c9a67d', 5);
+      c.punchT[0] = c.punchT[1] = 0.25;
+      if (o && dist2(o, c) < 5 && o.grounded){ damage(o, 11*c.power*adv(c, o)/o.defense, o.torso.position, c, true); o.stun += 22; launch(o, t.position, 2, 10); }
+      break;
+    case 'pounce': {
+      const v = toOpp(); c.specialT = 0.8; c.yaw = Math.atan2(v.x, v.z);
+      const h = Math.min(11, v.d*3.2);
+      c.parts.forEach(p => p.velocity.set(v.x*h, 7, v.z*h));
+      break;
+    }
+    case 'blitz': c.specialT = 1.1; c.specialPhase = 0; break;
+    case 'kick': c.specialT = 0.6; c.parts.forEach(p => p.velocity.set(f.x*7, 6.5, f.z*7)); break;
+    case 'throw': {
+      c.specialT = 0.3; c.punchT[c.punchSide] = 0.25;
+      const target = o ? o.torso.position : {x:t.position.x + f.x*5, y:0.5, z:t.position.z + f.z*5};
+      throwRock(c, target);
+      break;
+    }
+    case 'hypno':
+      c.specialT = 0.5;
+      for (let i = 0; i < 3; i++) setTimeout(() => shockwave(t.position.x, t.position.z, '#b07cff', 4), i*120);
+      if (o && dist2(o, c) < 5){
+        o.confused = 1.5 + sp*1.2; o.stun += 15; o.wobble = 0.8;
+        damage(o, 5*sp*adv(c, o), o.head.position, c, true);
+        toast(`${o.member.nick} ficou confuso!`);
+      }
+      break;
+    case 'blink': {
+      c.specialT = 0.4;
+      if (o){
+        const of = fwdOf(o);
+        burst(t.position, 14, ['#ffffff','#ffb36b'], 3);
+        hideCreature(c);
+        showCreature(c, o.torso.position.x - of.x*1.3, c.H + 0.1, o.torso.position.z - of.z*1.3);
+        c.wobble = 0; c.yaw = Math.atan2(of.x, of.z);
+        c.parts.forEach(p => p.velocity.set(0, 0, 0));
+        burst(c.torso.position, 14, ['#ffffff','#ffb36b'], 3);
+        if (Math.random() >= o.st.dodge){
+          damage(o, 9*sp*adv(c, o)/o.defense, o.torso.position, c, true);
+          o.stun += 12; launch(o, c.torso.position, 3, 2);
+        } else floatText(o.head.position, 'esquivou!', '#b9f5c8', 20);
+      }
+      break;
+    }
+  }
+}
+function updateSpecial(c, dt){
+  if (c.specialT <= 0) return;
+  c.specialClock += dt;
+  const t = c.torso, o = opponentOf(c);
+  if (c.special === 'slam'){
+    if (c.specialPhase === 0 && c.specialClock > 0.42){
+      c.specialPhase = 1;
+      const f = fwdOf(c);
+      const dx = o ? o.torso.position.x - t.position.x : f.x*2, dz = o ? o.torso.position.z - t.position.z : f.z*2;
+      c.parts.forEach(p => p.velocity.set(clamp(dx*2.2, -9, 9), -22, clamp(dz*2.2, -9, 9)));
+    }
+    if (c.specialPhase === 1 && c.grounded && t.velocity.y > -2){
+      c.specialPhase = 2; shockwave(t.position.x, t.position.z, '#c9a67d'); shake(0.25);
+      if (o && dist2(o, c) < 2.8){ damage(o, 10*c.power*adv(c, o)/o.defense, o.torso.position, c, true); launch(o, t.position, 6, 7); }
+    }
+  }
+  if (c.special === 'blitz'){
+    const n = Math.floor(c.specialClock/0.35);
+    if (n >= c.specialPhase && c.specialPhase < 3){
+      c.specialPhase++;
+      let vx = Math.sin(c.yaw), vz = Math.cos(c.yaw);
+      if (o){ const dx = o.torso.position.x - t.position.x, dz = o.torso.position.z - t.position.z, l = Math.hypot(dx, dz) || 1; vx = dx/l; vz = dz/l; c.yaw = Math.atan2(vx, vz); }
+      c.parts.forEach(p => p.velocity.set(vx*14, 1.5, vz*14));
+      c.hitCd = 0;
+    }
+    burst(t.position, 1, ['#f6e7c4','#e3b04b'], 1.5);
+  }
+  if (c.special === 'dash') burst(t.position, 1, ['#e8e2d6','#bdb7ad'], 2);
+}
+const eff = adv;
+
+/* pedras do macaco */
+const rocks = [];
+const rockGeo = new T.DodecahedronGeometry(0.16, 0);
+function throwRock(c, target){
+  const f = fwdOf(c);
+  const sx = c.head.position.x + f.x*0.4, sy = c.head.position.y + 0.2, sz = c.head.position.z + f.z*0.4;
+  const tx = target.x, ty = (target.y || 0.5) + 0.2, tz = target.z;
+  const tf = clamp(Math.hypot(tx - sx, tz - sz)/12, 0.3, 0.9);
+  const b = new C.Body({mass:0.4, shape:new C.Sphere(0.15), material:bodyMat, position:new C.Vec3(sx, sy, sz), collisionFilterGroup:G_BALL, collisionFilterMask:ALL & ~c.bit & ~G_TRAINER & ~G_BALL});
+  b.velocity.set((tx - sx)/tf, (ty - sy + 0.5*GRAV*tf*tf)/tf, (tz - sz)/tf);
+  b.isRock = true; b.thrower = c; b.spent = false; b.born = clock;
+  b.addEventListener('collide', e => onCollide(b, e.body));
+  world.addBody(b);
+  const m = mesh(rockGeo, toon('#8f887b')); scene.add(m);
+  rocks.push({body:b, mesh:m});
+}
+
+/* ================= Dano ================= */
+const hitQueue = [];
+function onCollide(part, other){
+  const rel = Math.min(40, part.velocity.vsub(other.velocity).norm());
+  hitQueue.push([part, other, rel]);
+}
+function processContacts(){
+  for (const eq of world.contacts){
+    for (const [x, y, r] of [[eq.bi, eq.bj, eq.ri], [eq.bj, eq.bi, eq.rj]]){
+      if (x.tip && x.owner && x.owner.grabHeld && !x.owner.removed && x.owner.grabbers.includes(x) && y.owner && y.owner !== x.owner){
+        tryGrab(x.owner, x, y, new C.Vec3(x.position.x + r.x, x.position.y + r.y, x.position.z + r.z));
+      }
+    }
+  }
+}
+function processHits(){
+  for (const [a, b, rel] of hitQueue){
+    if (a.isBall){ if (!a.used && b.owner && battle && b.owner === battle.wild) startCapture(a); continue; }
+    if (a.isRock){
+      if (a.spent) continue;
+      a.spent = true;
+      const o = b.owner, th = a.thrower;
+      if (o && o !== th && battle && !battle.over && ((th === battle.mon && o === battle.wild) || (th === battle.wild && o === battle.mon))){
+        if (Math.random() < o.st.dodge) floatText(o.head.position, 'esquivou!', '#b9f5c8', 20);
+        else { damage(o, 8*th.st.specPow*adv(th, o)/o.defense, a.position, th, true, b.kind === 'head'); o.stun += 14; launch(o, a.position, 3, 2); }
+      }
+      burst(a.position, 6, ['#8f887b','#c9c2b4'], 2);
+      continue;
+    }
+    const oa = a.owner; if (!oa || oa.removed) continue;
+    if (b.owner && b.owner !== oa) tryHit(oa, a, b.owner, b, rel);
+    else if (b.isGround || b.isStatic) envHit(oa, a, rel);
+  }
+  hitQueue.length = 0;
+}
+const BODY_SPECIALS = ['dash','slam','pounce','blitz'];
+function dangerous(c, part){
+  if (c.ko > 0 || c.fainted) return false;
+  if (BODY_SPECIALS.includes(c.special) && c.specialT > 0) return true;
+  if (c.special === 'kick' && c.specialT > 0 && part.kind === 'leg') return true;
+  return c.strikers.includes(part) && c.attackT > 0;
+}
+let lastAdvMsg = 0;
+function tryHit(att, ap, def, dp, rel){
+  if (!battle || battle.over || !dangerous(att, ap) || att.hitCd > 0) return;
+  if (!((att === battle.mon && def === battle.wild) || (att === battle.wild && def === battle.mon))) return;
+  const base = rel - 3.5; if (base <= 0) return;
+  att.hitCd = 0.2;
+  if (Math.random() < def.st.dodge){ floatText(dp.position, 'esquivou!', '#b9f5c8', 20); return; }
+  const special = att.specialT > 0 && (BODY_SPECIALS.includes(att.special) || att.special === 'kick');
+  let dmg = clamp(base*1.3, 2, 11)*att.power*adv(att, def)*(dp.kind === 'head' ? 1.4 : 1)/def.defense;
+  if (special) dmg *= 0.8 + 0.25*att.st.specPow;
+  launch(def, att.torso.position, (special ? 4 : 2.5)*Math.min(1.4, att.power), special ? 3 : 1.5);
+  damage(def, dmg, dp.position, att, special, dp.kind === 'head');
+}
+function envHit(c, part, rel){
+  if (!battle || battle.over || c.envCd > 0 || rel < 9) return;
+  if (c !== battle.mon && c !== battle.wild) return;
+  if ((BODY_SPECIALS.includes(c.special) || c.special === 'kick') && c.specialT > 0) return;
+  if (part.kind !== 'head' && part.kind !== 'torso') return;
+  c.envCd = 0.35;
+  damage(c, Math.min(30, rel - 9)*2.2*(part.kind === 'head' ? 1.4 : 1)*(c.thrownT > 0 ? 1.3 : 1), part.position, c.thrownT > 0 ? c.thrownBy : null, false);
+}
+function damage(def, dmg, pos, att, special, head){
+  if (def.fainted || !battle || battle.over) return;
+  dmg = Math.max(1, Math.round(dmg));
+  def.member.hp = Math.max(0, def.member.hp - dmg);
+  def.stun += dmg*1.3; def.wobble = 0.45;
+  floatText(pos, '-' + dmg, head ? '#ff4b4b' : '#ffffff', dmg >= 15 ? 34 : 26);
+  if (head) floatText({x:pos.x, y:pos.y + 0.5, z:pos.z}, 'na cabeça!', '#ffe066', 17);
+  burst(pos, 6 + Math.min(14, dmg), ['#ffffff', '#ffe066', def.sp.color], 4);
+  shake(Math.min(0.35, 0.06 + dmg*0.012));
+  if (att && clock - lastAdvMsg > 2.5){
+    const e = adv(att, def);
+    if (e > 1){ toast(`${ATTR[att.sp.attr].name} vence ${ATTR[def.sp.attr].name}! Dano extra.`); lastAdvMsg = clock; }
+    else if (e < 1 && special){ toast(`${ATTR[def.sp.attr].name} resiste a ${ATTR[att.sp.attr].name}...`); lastAdvMsg = clock; }
+  }
+  if (def.member.hp <= 0){ def.fainted = true; releaseGrabs(def, false); toast(`${def.member.nick} desmaiou!`); }
+  else if (def.stun > 45 && def.ko <= 0){ def.ko = 2; def.stun = 0; toast(`${def.member.nick} ficou nocauteado!`); }
+}
+
+/* ================= Efeitos ================= */
+const particles = [];
+const partGeo = new T.BoxGeometry(0.09, 0.09, 0.09);
+function burst(pos, n, colors, spd){
+  for (let i = 0; i < n; i++){
+    if (particles.length > 260) break;
+    const m = new T.Mesh(partGeo, toon(pick(colors)));
+    m.position.set(pos.x, pos.y, pos.z); scene.add(m);
+    particles.push({m, vx:rand(-1,1)*spd, vy:rand(0.5,1.5)*spd, vz:rand(-1,1)*spd, life:rand(0.3, 0.7)});
+  }
+}
+const rings = [];
+function shockwave(x, z, color, max=3){
+  const m = new T.Mesh(new T.RingGeometry(0.8, 1, 40), new T.MeshBasicMaterial({color, transparent:true, side:T.DoubleSide}));
+  m.rotation.x = -Math.PI/2; m.position.set(x, 0.05, z); scene.add(m);
+  rings.push({m, t:0, max});
+}
+const shake = a => { cam.shake = Math.max(cam.shake, a); };
+const floats = [];
+function floatText(pos, text, color, size){
+  if (battle && battle.pvp && battle.host && net.duel) net.duel.ev.push([++net.duel.evId, +pos.x.toFixed(2), +pos.y.toFixed(2), +pos.z.toFixed(2), String(text).slice(0, 24), color, size]);
+  const el = document.createElement('div'); el.className = 'dmg'; el.textContent = text; el.style.color = color; el.style.fontSize = size + 'px';
+  document.body.appendChild(el);
+  floats.push({el, p:new T.Vector3(pos.x, pos.y + 0.4, pos.z), life:1});
+}
+function toast(text){
+  const el = document.createElement('div'); el.className = 'toast card-ui'; el.textContent = text;
+  const box = $('toasts'); box.prepend(el);
+  while (box.children.length > 4) box.lastChild.remove();
+  setTimeout(() => { el.style.opacity = 0; el.style.transform = 'translateY(8px)'; }, 2600);
+  setTimeout(() => el.remove(), 3100);
+}
+
+/* ================= Retratos dos animais ================= */
+const portraits = {};
+const prt = new T.WebGLRenderTarget(256, 256);
+const prCam = new T.PerspectiveCamera(28, 1, 0.1, 50);
+function portrait(species){
+  if (portraits[species]) return portraits[species];
+  const c = makeCreature(newMember(species, 5), 1000, 1000, 'preview');
+  syncCreature(c);
+  const sz = c.plan === 'quad' ? Math.max(c.H + c.d.hr*2, c.d.tl*2.6) : c.H + c.d.th + c.d.hr*2.2;
+  const cx = 1000, cy = c.plan === 'quad' ? c.H*0.8 : sz*0.48, cz = c.plan === 'quad' ? 1000 + c.d.tl*0.3 : 1000;
+  const dist = sz*2.1 + 0.45;
+  prCam.position.set(cx + dist*0.62, cy + dist*0.28, cz + dist*0.75); prCam.lookAt(cx, cy, cz);
+  scene.background = null; renderer.setClearColor(0x000000, 0);
+  renderer.setRenderTarget(prt); renderer.clear(); renderer.render(scene, prCam); renderer.setRenderTarget(null);
+  scene.background = SKY;
+  const buf = new Uint8Array(256*256*4);
+  renderer.readRenderTargetPixels(prt, 0, 0, 256, 256, buf);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const g = cv.getContext('2d'), img = g.createImageData(256, 256);
+  for (let y = 0; y < 256; y++) img.data.set(buf.subarray((255 - y)*1024, (256 - y)*1024), y*1024);
+  g.putImageData(img, 0, 0);
+  destroyCreature(c);
+  return portraits[species] = cv.toDataURL();
+}
+
+/* ================= Itens em 3D ================= */
+function addDir(parent, geo, mat, pos, scl, dir){
+  const m = mesh(geo, mat, false);
+  m.position.set(pos[0], pos[1], pos[2]); m.scale.set(scl[0], scl[1], scl[2]);
+  m.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), new T.Vector3(dir[0], dir[1], dir[2]).normalize());
+  parent.add(m); return m;
+}
+function makeItemMesh(key){
+  const g = new T.Group();
+  const leaf = toon('#4aaa4f');
+  switch (key){
+    case 'bolota':
+      add(g, GS, toon('#d39a5c'), [0, -0.04, 0], [0.14, 0.17, 0.14], null, true);
+      add(g, GC, toon('#b47c44'), [0, -0.23, 0], [0.04, 0.06, 0.04], [Math.PI, 0, 0]);
+      add(g, GS, toon('#6b4426'), [0, 0.06, 0], [0.16, 0.1, 0.16], null, true);
+      for (let i = 0; i < 10; i++){ const a = i/10*TAU; add(g, GS, toon('#563419'), [Math.cos(a)*0.12, 0.08, Math.sin(a)*0.12], [0.035, 0.03, 0.035]); }
+      add(g, GY, toon('#4e301d'), [0.02, 0.18, 0], [0.018, 0.08, 0.018], [0, 0, -0.3]);
+      break;
+    case 'pinha':
+      add(g, GS, toon('#5e3a1c'), [0, 0, 0], [0.11, 0.2, 0.11], null, true);
+      for (let row = 0; row < 6; row++){
+        const y = 0.16 - row*0.065, rr = 0.06 + Math.sin((row + 0.5)/6*Math.PI)*0.08;
+        for (let k = 0; k < 8; k++){
+          const a = k/8*TAU + row*0.4;
+          addDir(g, GC, toon(row % 2 ? '#8f5a2f' : '#a86a35'), [Math.cos(a)*rr, y, Math.sin(a)*rr], [0.04, 0.07, 0.025], [Math.cos(a), -0.7, Math.sin(a)]);
+        }
+      }
+      add(g, GY, toon('#4e301d'), [0, 0.22, 0], [0.02, 0.06, 0.02]);
+      break;
+    case 'coco':
+      add(g, GS, toon('#5b3a1f'), [0, 0, 0], [0.18, 0.17, 0.18], null, true);
+      for (let i = 0; i < 14; i++){ const a = rand(0, TAU), y = rand(-0.12, 0.12), rr = Math.sqrt(0.0324 - y*y)*1.02; addDir(g, GB, toon('#7a5230'), [Math.cos(a)*rr, y, Math.sin(a)*rr], [0.012, 0.09, 0.012], [-Math.sin(a), rand(-0.5,0.5), Math.cos(a)]); }
+      for (let i = 0; i < 3; i++){ const a = i/3*TAU; add(g, GS, toon('#2e1c0e'), [Math.cos(a)*0.05, 0.16, Math.sin(a)*0.05], [0.025, 0.015, 0.025]); }
+      break;
+    case 'semente':
+      add(g, GS, toon('#f2c230'), [0, 0, 0], [0.12, 0.17, 0.12], null, true);
+      add(g, GS, toon('#fff1a8'), [-0.04, 0.06, 0.08], [0.03, 0.05, 0.02]);
+      add(g, GY, toon('#3f8a3a'), [0, 0.2, 0], [0.012, 0.07, 0.012]);
+      add(g, GS, leaf, [0.06, 0.24, 0], [0.07, 0.015, 0.035], [0, 0, 0.4]);
+      add(g, GS, leaf, [-0.05, 0.23, 0], [0.05, 0.012, 0.03], [0, 0, -0.5]);
+      break;
+    case 'fruta':
+      for (const [x, y, z] of [[-0.06, -0.03, 0], [0.06, -0.03, 0.02], [0, 0.05, -0.02]]) add(g, GS, toon('#d93a4a'), [x, y, z], [0.075, 0.075, 0.075], null, true);
+      add(g, GS, leaf, [0.02, 0.13, 0], [0.08, 0.015, 0.04], [0, 0.4, 0.3]);
+      break;
+    case 'mel':
+      add(g, GY, toon('#f2a31b'), [0, -0.02, 0], [0.12, 0.22, 0.12], null, true);
+      add(g, GY, toon('#fff6ea'), [0, -0.02, 0], [0.125, 0.07, 0.125]);
+      add(g, GY, toon('#8a5a3b'), [0, 0.11, 0], [0.13, 0.05, 0.13]);
+      add(g, GS, toon('#f2a31b'), [0.12, 0.05, 0], [0.03, 0.05, 0.03]);
+      break;
+    case 'cesta':
+      add(g, GY, toon('#b07a45'), [0, -0.06, 0], [0.2, 0.14, 0.2], null, true);
+      for (let i = 0; i < 6; i++){ const a = i/6*TAU; add(g, GS, toon(['#d93a4a','#f28c28','#f2c230','#7ac74f'][i % 4]), [Math.cos(a)*0.1, 0.04, Math.sin(a)*0.1], [0.06, 0.06, 0.06]); }
+      add(g, GS, toon('#f2c230'), [0, 0.07, 0], [0.065, 0.065, 0.065]);
+      add(g, new T.TorusGeometry(0.17, 0.015, 6, 16, Math.PI), toon('#8a5a3b'), [0, 0.02, 0], [1, 1.1, 1]);
+      break;
+    case 'erva':
+      for (const a of [-0.45, 0, 0.45]) addDir(g, GS, leaf, [Math.sin(a)*0.07, 0.04, 0], [0.05, 0.16, 0.02], [Math.sin(a), 1, 0]);
+      add(g, GY, toon('#24702f'), [0, -0.12, 0], [0.02, 0.12, 0.02]);
+      add(g, GY, toon('#e7c7a3'), [0, -0.08, 0], [0.035, 0.025, 0.035]);
+      add(g, GS, toon('#ffffff'), [0.03, 0.18, 0.02], [0.02, 0.02, 0.02]);
+      break;
+  }
+  return g;
+}
+const itemIcons = {};
+function itemIcon(key){
+  if (itemIcons[key]) return itemIcons[key];
+  const obj = makeItemMesh(key);
+  obj.position.set(2000, 0, 2000); scene.add(obj);
+  prCam.position.set(2000 + 0.42, 0.32, 2000 + 0.62); prCam.lookAt(2000, 0, 2000);
+  scene.background = null; renderer.setClearColor(0x000000, 0);
+  renderer.setRenderTarget(prt); renderer.clear(); renderer.render(scene, prCam); renderer.setRenderTarget(null);
+  scene.background = SKY;
+  const buf = new Uint8Array(256*256*4);
+  renderer.readRenderTargetPixels(prt, 0, 0, 256, 256, buf);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const gg = cv.getContext('2d'), img = gg.createImageData(256, 256);
+  for (let y = 0; y < 256; y++) img.data.set(buf.subarray((255 - y)*1024, (256 - y)*1024), y*1024);
+  gg.putImageData(img, 0, 0);
+  scene.remove(obj);
+  return itemIcons[key] = cv.toDataURL();
+}
+
+/* ================= Selvagens e seguidor ================= */
+let follower = null;
+function spawnFollower(){
+  if (follower){ destroyCreature(follower); follower = null; }
+  const m = game.team.find(x => x.hp > 0);
+  if (!m) return;
+  if (game.team[0] !== m){ game.team.splice(game.team.indexOf(m), 1); game.team.unshift(m); }
+  const f = trainerFwd();
+  follower = makeCreature(m, trainer.pos.x - f.x*1.6, trainer.pos.z - f.z*1.6, 'follower');
+  renderTeam();
+}
+// Cada área de mato mantém PER_PATCH animais; quando falta um, outro sai do mato depois de alguns segundos
+const PER_PATCH = 2;
+function spawnWild(p, popOut){
+  if (slotFree.length < 3) return false;
+  for (let tries = 0; tries < 12; tries++){
+    const a = rand(0, TAU), d = Math.sqrt(Math.random())*(p.r - 1);
+    const x = p.x + Math.cos(a)*d, z = p.z + Math.sin(a)*d;
+    if (Math.hypot(x - trainer.pos.x, z - trainer.pos.z) < 3.5) continue;
+    if (battle && Math.hypot(x - battle.center.x, z - battle.center.z) < battle.R + 1.5) continue;
+    const m = newMember(pick(p.pool), Math.round(rand(p.lv[0], p.lv[1])));
+    const c = makeCreature(m, x, z, 'wild'); c.patch = p; c.cool = 2;
+    if (popOut){ c.parts.forEach(b => b.velocity.y = 6); burst({x, y:0.4, z}, 12, ['#4aaa4f','#5fae4f','#8fd27a'], 3); }
+    return true;
+  }
+  return false;
+}
+const wilds = () => creatures.filter(c => c.role === 'wild');
+function updateSpawns(dt){
+  for (const p of PATCHES){
+    p.timer = (p.timer || 0) - dt;
+    const n = creatures.filter(c => c.patch === p && (c.role === 'wild' || c.role === 'enemy')).length;
+    if (n < PER_PATCH && p.timer <= 0){ if (spawnWild(p, true)) p.timer = rand(5, 9); else p.timer = 1; }
+  }
+  // animais que se perderam (caíram ou saíram muito da área) voltam pro mato
+  for (const w of wilds()){
+    if (w.removed) continue;
+    const t = w.torso.position;
+    if (t.y < -3 || Math.hypot(t.x - w.patch.x, t.z - w.patch.z) > w.patch.r + 8) destroyCreature(w);
+  }
+}
+
+function aiWander(c, dt){
+  const ai = c.ai, inp = c.input = {};
+  const t = c.torso.position, p = c.patch;
+  ai.t -= dt;
+  if (ai.t <= 0){
+    ai.t = rand(1.5, 4);
+    if (Math.random() < 0.35) ai.target = null;
+    else { const a = rand(0, TAU), d = Math.sqrt(Math.random())*(p.r - 1); ai.target = {x:p.x + Math.cos(a)*d, z:p.z + Math.sin(a)*d}; }
+    if (Math.random() < 0.15) inp.jump = true;
+  }
+  if (ai.target){
+    const dx = ai.target.x - t.x, dz = ai.target.z - t.z, l = Math.hypot(dx, dz);
+    if (l > 0.4){ inp.mx = dx/l*0.35; inp.mz = dz/l*0.35; } else ai.target = null;
+  }
+  if (Math.hypot(trainer.pos.x - t.x, trainer.pos.z - t.z) < 6) inp.face = {x:trainer.pos.x, z:trainer.pos.z};
+}
+function aiFollow(c){ aiFollowTo(c, trainer.pos.x, trainer.pos.z, trainer.yaw); }
+function aiFollowTo(c, px, pz, yaw){
+  const inp = c.input = {};
+  const tx = px - Math.sin(yaw)*1.6, tz = pz - Math.cos(yaw)*1.6;
+  const t = c.torso.position, dx = tx - t.x, dz = tz - t.z, l = Math.hypot(dx, dz);
+  if (l > 14 || t.y < -3){ showTeleport(c, tx, tz); return; }
+  if (l > 0.8){ const k = clamp(l/2.5, 0, 1); inp.mx = dx/l*k; inp.mz = dz/l*k; }
+  if (l > 3 && Math.random() < 0.01) inp.jump = true;
+}
+function showTeleport(c, x, z){ hideCreature(c); showCreature(c, x, c.H + 0.3, z); }
+function aiFight(c, dt){
+  const inp = c.input = {};
+  const o = opponentOf(c);
+  if (!o || o.fainted || c.ko > 0) return;
+  const ai = c.ai; ai.t -= dt;
+  const agg = 0.55 + 0.05*c.member.level;
+  const t = c.torso.position, dx = o.torso.position.x - t.x, dz = o.torso.position.z - t.z, dist = Math.hypot(dx, dz) || 0.01;
+  const ranged = c.sp.special === 'throw' || c.sp.special === 'hypno';
+  const want = ranged && c.specialCd > 0.2 ? c.reach : ranged ? 3.5 : c.reach;
+  if (ai.t <= 0){
+    ai.t = rand(0.2, 0.5)/agg;
+    ai.mode = dist > want*1.1 ? 'approach' : pick(['fight','fight','circle','retreat']);
+    ai.side = Math.random() < 0.5 ? 1 : -1;
+    if (Math.random() < 0.07*agg && dist < c.reach + 0.5 && !ai.grabFor) ai.grabFor = rand(1.2, 2.2);
+  }
+  let mx = 0, mz = 0;
+  const ux = dx/dist, uz = dz/dist;
+  if (ai.mode === 'approach'){ mx = ux; mz = uz; }
+  else if (ai.mode === 'retreat'){ mx = -ux*0.7; mz = -uz*0.7; }
+  else if (ai.mode === 'circle'){ mx = -uz*ai.side*0.7 + ux*0.2; mz = ux*ai.side*0.7 + uz*0.2; }
+  if (ai.grabFor > 0){
+    ai.grabFor -= dt; inp.grab = true;
+    if (c.grabs.some(g => g.owner)){ inp.lift = true; mx = -ux*0.3; mz = -uz*0.3; if (ai.grabFor < 0.2) ai.grabFor = 0; }
+    else { mx = ux; mz = uz; }
+    if (ai.grabFor <= 0){ ai.grabFor = 0; inp.grab = false; }
+  }
+  inp.mx = mx; inp.mz = mz; inp.face = o.torso.position;
+  if (!inp.grab && dist < c.reach && Math.random() < 0.09*agg) inp.punch = true;
+  const specRange = {throw:7, hypno:4.5, blink:8, pounce:6, blitz:7, dash:5, kick:2.5, slam:4, quake:4.5}[c.sp.special] || 3;
+  if (c.specialCd <= 0 && dist < specRange && Math.random() < 0.02*agg) inp.special = true;
+  if (Math.random() < 0.004) inp.jump = true;
+}
+
+/* ================= Batalha e captura ================= */
+let battle = null;
+let mode = 'title';
+const ringMesh = new T.Mesh(new T.RingGeometry(6.4, 6.7, 64), new T.MeshBasicMaterial({color:'#ffffff', transparent:true, opacity:0.75, side:T.DoubleSide}));
+ringMesh.rotation.x = -Math.PI/2; ringMesh.visible = false; scene.add(ringMesh);
+const reticle = new T.Mesh(new T.RingGeometry(0.35, 0.48, 28), new T.MeshBasicMaterial({color:'#ff5a36', transparent:true, opacity:0.9, side:T.DoubleSide}));
+reticle.rotation.x = -Math.PI/2; reticle.visible = false; scene.add(reticle);
+
+function opponentOf(c){
+  if (!battle) return null;
+  const o = c === battle.mon ? battle.wild : c === battle.wild ? battle.mon : null;
+  return o && !o.removed ? o : null;
+}
+function startBattle(w){
+  if (!follower || follower.fainted) return;
+  mode = 'battle';
+  const tx = trainer.pos.x, tz = trainer.pos.z, wp = w.torso.position;
+  const dx = wp.x - tx, dz = wp.z - tz, l = Math.hypot(dx, dz) || 1;
+  const center = {x:wp.x - dx/l*1.6, z:wp.z - dz/l*1.6};
+  battle = {wild:w, mon:follower, member:follower.member, center, R:6.5, over:false, capture:null, endT:0, result:null, faintT:0, switchCd:0};
+  follower.role = 'fighter'; w.role = 'enemy'; follower = null;
+  trainer.yaw = Math.atan2(dx, dz);
+  ringMesh.position.set(center.x, 0.04, center.z); ringMesh.visible = true;
+  w.parts.forEach(p => p.velocity.y += 4);
+  floatText({x:wp.x, y:wp.y + 1.2, z:wp.z}, '!', '#ff5a36', 44);
+  toast(`Um ${w.member.nick} selvagem (Nv. ${w.member.level}, ${ATTR[w.sp.attr].name}) apareceu! Vai, ${battle.mon.member.nick}!`);
+  setHud();
+}
+function endBattle(result){ if (!battle || battle.over) return; battle.over = true; battle.result = result; battle.endT = result === 'flee' ? 0.3 : 1.8; }
+function levelUp(m, log){
+  while (m.xp >= xpNext(m)){
+    m.xp -= xpNext(m);
+    const a = stats(m); m.level++; const b = stats(m);
+    m.maxHp = b.maxHp; m.hp += b.maxHp - a.maxHp;
+    log.push(`${m.nick} subiu pro nível ${m.level}! FOR +${(b.str - a.str).toFixed(1)} · AGI +${(b.agi - a.agi).toFixed(1)} · INT +${(b.int - a.int).toFixed(1)}`);
+  }
+}
+function finishBattle(){
+  const r = battle.result, W = battle.wild, lead = battle.member, log = [];
+  if (r === 'win' || r === 'capture'){
+    if (r === 'capture'){
+      W.member.hp = Math.max(1, W.member.hp);
+      if (game.team.length < 6){ game.team.push(W.member); log.push(`${W.member.nick} (Nv. ${W.member.level}) entrou pro seu time!`); }
+      else { game.box.push(W.member); log.push(`Time cheio: ${W.member.nick} foi pra caixa.`); }
+    }
+    const xp = Math.round((r === 'capture' ? 10 : 15) + 10*W.member.level);
+    lead.xp += xp; log.push(`${lead.nick} ganhou ${xp} XP.`);
+    levelUp(lead, log);
+    const coins = Math.round((r === 'capture' ? 10 : 25) + (r === 'capture' ? 5 : 10)*W.member.level);
+    game.money += coins; log.push(`Você ganhou ${coins} moedas.`);
+  }
+  if (r === 'flee'){ log.push('Você fugiu!'); W.role = 'wild'; W.cool = 6; W.ai = {t:0, target:null}; W.input = {}; W.confused = 0; }
+  else if (!W.dead) destroyCreature(W);
+  const mon = battle.mon;
+  battle = null; mode = 'world';
+  ringMesh.visible = false; reticle.visible = false;
+  for (const rk of rocks.slice()) removeRock(rk);
+  if (r === 'lose'){
+    if (!mon.dead) destroyCreature(mon);
+    blackout(); save(); return;
+  }
+  if (mon.dead || mon.fainted){ if (!mon.dead) destroyCreature(mon); spawnFollower(); }
+  else { mon.role = 'follower'; follower = mon; mon.input = {}; mon.confused = 0; }
+  log.forEach((l, i) => setTimeout(() => toast(l), i*400));
+  save(); setHud();
+}
+function blackout(){
+  $('fade').style.opacity = 1;
+  setTimeout(() => {
+    healAll(); trainer.pos.set(HEAL_SPOT.x, 0, HEAL_SPOT.z + 1.5); trainer.yaw = 0;
+    spawnFollower(); setHud();
+    $('fade').style.opacity = 0;
+    toast('Todos desmaiaram... Você correu pro Centro de Cura.');
+    toast('Seu time foi curado.');
+  }, 700);
+}
+function healAll(){ for (const m of game.team){ m.maxHp = stats(m).maxHp; m.hp = m.maxHp; } save(); renderTeam(); }
+
+const SHELL = {bolota:['#d39a5c','#6b4426'], pinha:['#8f5a2f','#5e3a1c'], coco:['#5b3a1f','#7a5230'], semente:['#f2c230','#fff1a8']};
+function cycleCapture(dir=1){
+  const owned = CAPTURE_KEYS.filter(k => count(k) > 0);
+  if (!owned.length){ toast('Você não tem itens de captura. Compre na loja.'); return; }
+  const i = owned.indexOf(game.sel);
+  game.sel = owned[(i + dir + owned.length) % owned.length];
+  toast(`Arremesso: ${ITEMS[game.sel].name} (${count(game.sel)})`); setHud();
+}
+const balls = [];
+function throwBall(target){
+  if (!battle || battle.over || battle.capture || trainer.throwT > 0) return;
+  if (count(game.sel) <= 0){
+    const other = CAPTURE_KEYS.find(k => count(k) > 0);
+    if (!other){ toast('Acabaram os itens de captura! Compre mais na loja.'); return; }
+    game.sel = other;
+  }
+  const itemKey = game.sel;
+  const f = trainerFwd();
+  const sx = trainer.pos.x + f.x*0.4, sy = 1.7, sz = trainer.pos.z + f.z*0.4;
+  const tx = target.x, ty = (target.y || 0) + 0.7, tz = target.z;
+  const d = Math.hypot(tx - sx, tz - sz), tf = clamp(d/10, 0.4, 1.1);
+  const mask = ALL & ~G_TRAINER & ~G_BALL & ~battle.mon.bit;
+  const ball = new C.Body({mass:0.3, shape:new C.Sphere(0.17), material:bodyMat, position:new C.Vec3(sx, sy, sz), collisionFilterGroup:G_BALL, collisionFilterMask:mask, linearDamping:0.1});
+  ball.velocity.set((tx - sx)/tf, (ty - sy + 0.5*GRAV*tf*tf)/tf, (tz - sz)/tf);
+  ball.angularVelocity.set(rand(-8,8), 0, rand(-8,8));
+  ball.isBall = true; ball.used = false; ball.born = clock; ball.item = itemKey;
+  ball.addEventListener('collide', e => onCollide(ball, e.body));
+  world.addBody(ball);
+  const m = makeItemMesh(itemKey); m.scale.setScalar(1.15); scene.add(m);
+  balls.push({body:ball, mesh:m, item:itemKey});
+  trainer.yaw = Math.atan2(tx - trainer.pos.x, tz - trainer.pos.z);
+  trainer.throwT = 0.6; addItem(itemKey, -1);
+  if (count(itemKey) <= 0){ const o = CAPTURE_KEYS.find(k => count(k) > 0); if (o) game.sel = o; }
+  save(); setHud();
+}
+function removeBall(b){ world.removeBody(b.body); scene.remove(b.mesh); balls.splice(balls.indexOf(b), 1); }
+function removeRock(r){ world.removeBody(r.body); scene.remove(r.mesh); rocks.splice(rocks.indexOf(r), 1); }
+function startCapture(ballBody){
+  const W = battle && battle.wild;
+  if (!W || battle.capture || battle.over || W.removed || W.fainted) return;
+  ballBody.used = true;
+  const hpR = W.member.hp/W.member.maxHp;
+  const it = ITEMS[ballBody.item];
+  const base = 0.12 + 0.72*(1 - hpR) + (W.ko > 0 ? 0.2 : 0) + (W.confused > 0 ? 0.08 : 0);
+  const chance = it.mult >= 99 ? 1 : clamp(base*it.mult, 0.05, 0.97);
+  const success = Math.random() < chance;
+  const breakAt = success ? 99 : (Math.random() < chance ? 3 : Math.random() < 0.5 ? 2 : 1);
+  // cipós e folhas puxam o animal pra dentro da casca
+  const wp = W.torso.position;
+  for (let i = 0; i < 22; i++){
+    const a = i/22*TAU*2, r = 0.9 - i*0.03;
+    burst({x:wp.x + Math.cos(a)*r, y:0.2 + i*0.05, z:wp.z + Math.sin(a)*r}, 1, ['#4aaa4f','#8fd27a','#3f8a3a'], 1);
+  }
+  shockwave(wp.x, wp.z, '#8fd27a', 1.5);
+  hideCreature(W);
+  ballBody.velocity.set(0, 5, 0); ballBody.angularVelocity.set(0, 0, 0);
+  ballBody.linearDamping = 0.5; ballBody.angularDamping = 0.99;
+  battle.capture = {ball:balls.find(b => b.body === ballBody), t:0, shakes:0, success, breakAt};
+  toast(`${it.name} fechou ${W.member.nick} lá dentro! (${Math.round(chance*100)}% de chance)`);
+}
+function sprout(ballObj){
+  const g = new T.Group();
+  add(g, GY, toon('#3f8a3a'), [0, 0.1, 0], [0.02, 0.2, 0.02]);
+  add(g, GS, toon('#4aaa4f'), [0.08, 0.2, 0], [0.1, 0.02, 0.05], [0, 0, 0.5]);
+  add(g, GS, toon('#5fc25a'), [-0.07, 0.17, 0], [0.08, 0.018, 0.04], [0, 0, -0.5]);
+  g.position.y = 0.15; g.scale.setScalar(0.01);
+  ballObj.mesh.add(g); ballObj.sprout = g;
+}
+function updateCapture(dt){
+  const cap = battle.capture; if (!cap) return;
+  cap.t += dt;
+  const n = Math.floor((cap.t - 0.4)/0.85);
+  const ph = ((cap.t - 0.4) % 0.85)/0.85;
+  cap.wob = cap.t > 0.4 && ph < 0.4 ? Math.sin(ph/0.4*TAU)*0.5 : 0;
+  if (n > cap.shakes && n >= 1){
+    cap.shakes = n;
+    const W = battle.wild, bp = cap.ball.body.position;
+    if (cap.shakes >= cap.breakAt){
+      burst(bp, 22, SHELL[cap.ball.item] || ['#ffffff'], 5);
+      showCreature(W, bp.x, W.H + 0.4, bp.z);
+      removeBall(cap.ball); battle.capture = null;
+      toast(pick(['Ah não! Quebrou a casca e escapou!', 'Quase! Saiu lá de dentro!', 'Argh! Parecia que ia dar!']));
+    } else if (cap.shakes >= 3 && cap.success){
+      cap.done = true; cap.wob = 0;
+      sprout(cap.ball);
+      burst(bp, 30, ['#ffe066','#ffffff','#8fd27a'], 5);
+      toast(`Peguei! ${W.member.nick} foi capturado! A ${ITEMS[cap.ball.item].name.toLowerCase()} brotou.`);
+      setTimeout(() => { if (cap.ball && balls.includes(cap.ball)) removeBall(cap.ball); }, 1500);
+      endBattle('capture');
+    } else floatText({x:bp.x, y:bp.y + 0.3, z:bp.z}, '...', '#ffffff', 22);
+  }
+}
+function switchTo(i){
+  if (mode === 'world'){
+    const m = game.team[i]; if (!m || m.hp <= 0 || i === 0) return;
+    game.team.splice(i, 1); game.team.unshift(m); spawnFollower(); toast(`${m.nick} agora te acompanha.`); save(); return;
+  }
+  if (!battle || battle.over || battle.capture || battle.switchCd > 0) return;
+  const m = game.team[i]; if (!m || m.hp <= 0 || m === battle.member) return;
+  const old = battle.mon;
+  burst(old.torso.position, 12, ['#ffffff','#ff5a36'], 3);
+  destroyCreature(old);
+  game.team.splice(i, 1); game.team.unshift(m);
+  const f = trainerFwd();
+  battle.mon = makeCreature(m, trainer.pos.x + f.x*1.2, trainer.pos.z + f.z*1.2, 'fighter');
+  battle.member = m; battle.switchCd = 1.5; battle.faintT = 0;
+  toast(`Volta! Vai, ${m.nick}!`); setHud();
+}
+function battleUpdate(dt){
+  const b = battle, P = b.mon, W = b.wild;
+  b.switchCd -= dt;
+  if (b.pvp){
+    for (const c of creatures){
+      if (c.removed) continue;
+      const t = c.torso.position, dx = t.x - b.center.x, dz = t.z - b.center.z, d = Math.hypot(dx, dz) || 0.01;
+      if (c === P || c === W){ if (d > b.R){ const k = (d - b.R)*c.totalMass*40; c.torso.force.x -= dx/d*k; c.torso.force.z -= dz/d*k; } }
+      else if (d < b.R + 1){ c.torso.force.x += dx/d*c.totalMass*30; c.torso.force.z += dz/d*c.totalMass*30; }
+    }
+    return;
+  }
+  if (b.over){ b.endT -= dt; if (W.fainted && !W.removed) W.fade = Math.max(0, W.fade - dt*0.8); if (b.endT <= 0) finishBattle(); return; }
+  updateCapture(dt);
+  if (!battle) return;
+  for (const c of [P, W]){
+    if (c.removed) continue;
+    const t = c.torso.position, dx = t.x - b.center.x, dz = t.z - b.center.z, d = Math.hypot(dx, dz);
+    if (d > b.R){ const k = (d - b.R)*c.totalMass*40; c.torso.force.x -= dx/d*k; c.torso.force.z -= dz/d*k; }
+  }
+  for (const c of creatures){
+    if (c === P || c === W || c.removed) continue;
+    const t = c.torso.position, dx = t.x - b.center.x, dz = t.z - b.center.z, d = Math.hypot(dx, dz);
+    if (d < b.R + 1 && d > 0.01){ c.torso.force.x += dx/d*c.totalMass*30; c.torso.force.z += dz/d*c.totalMass*30; }
+  }
+  if (W.fainted && !W.removed) endBattle('win');
+  if (P.fainted){
+    b.faintT += dt;
+    if (b.faintT > 1.6){
+      const idx = game.team.findIndex(m => m.hp > 0);
+      if (idx >= 0) switchTo(idx);
+      else endBattle('lose');
+    }
+  }
+}
+
+/* ================= Multiplayer =================
+   Lobby (sala principal): cada jogador publica na presença onde está, quem está levando e se está desafiando alguém.
+   Duelo: quem desafiou é o "host" e roda a física da luta; o convidado manda os comandos e recebe o estado ~30x/s. */
+const r2 = v => Math.round(v*100)/100, r3 = v => Math.round(v*1000)/1000;
+const net = {room:null, user:null, remotes:new Map(), names:{}, challenge:null, accept:null, decline:null, pubT:0, duel:null, nameT:-9};
+(async function initNet(){
+  try{
+    if (!window.claude || !window.claude.use) return;
+    const room = await window.claude.use('room');
+    if (!room) return;
+    net.user = await window.claude.use('user');
+    net.room = room;
+    room.onPeers(() => {}, () => { net.room = null; });
+    if (mode !== 'title') setHud();
+  }catch(e){ net.room = null; }
+})();
+const lobbyPeers = () => { try { return net.room ? net.room.peers() : []; } catch(e){ return []; } };
+const myPeerId = () => { const me = lobbyPeers().find(p => p.sameTab); return me ? me.peer : null; };
+const REMOTE_COLORS = ['#3b64d6','#2b9a4a','#8e44ad','#f28c28','#16a3a3','#d63b8f'];
+function peerColor(peer){ let h = 0; for (const ch of String(peer)) h = (h*31 + ch.charCodeAt(0))|0; return REMOTE_COLORS[Math.abs(h) % REMOTE_COLORS.length]; }
+const nameOf = p => (p && p.by && net.names[p.by]) || 'Treinador';
+function cloneMember(m){ const c = {species:m.species, level:m.level, xp:0, nick:m.nick}; c.maxHp = stats(c).maxHp; c.hp = c.maxHp; return c; }
+
+function publishLobby(dt){
+  net.pubT -= dt; if (net.pubT > 0) return; net.pubT = 0.1;
+  const lead = game.team.find(m => m.hp > 0) || game.team[0];
+  const st = mode === 'battle' ? (net.duel ? 'd' : 'b') : 'w';
+  net.room.presence({x:r2(trainer.pos.x), z:r2(trainer.pos.z), y:r2(trainer.yaw), mv:trainer.moving ? 1 : 0, sp:lead ? lead.species : null, lv:lead ? lead.level : 1, st,
+    ch:net.challenge, ac:net.accept, dc:net.decline}).catch(() => {});
+}
+function updateRemotes(){
+  const seen = new Set(), ids = [];
+  for (const p of lobbyPeers()){
+    if (p.sameTab || p.kind !== 'viewer') continue;
+    const pr = p.presence || {};
+    if (typeof pr.x !== 'number' || typeof pr.z !== 'number') continue;
+    seen.add(p.peer); if (p.by) ids.push(p.by);
+    let r = net.remotes.get(p.peer);
+    if (!r){
+      const tag = document.createElement('div'); tag.className = 'tag'; document.body.appendChild(tag);
+      r = {peer:p.peer, model:makeTrainerModel(peerColor(p.peer)), tag, x:pr.x, z:pr.z, yaw:+pr.y || 0, walk:0, pet:null, petKey:''};
+      net.remotes.set(p.peer, r);
+    }
+    r.p = p; r.tx = clamp(pr.x, -MAP, MAP); r.tz = clamp(pr.z, -MAP, MAP); r.tyaw = +pr.y || 0; r.mv = !!pr.mv; r.st = pr.st;
+    const sp = SPECIES[pr.sp] ? pr.sp : null, lv = clamp(pr.lv|0, 1, 100);
+    const key = r.st === 'w' && sp ? sp + ':' + lv : '';
+    if (key !== r.petKey){
+      if (r.pet){ destroyCreature(r.pet); r.pet = null; }
+      if (key && slotFree.length > 4) r.pet = makeCreature(newMember(sp, lv), r.x - 1, r.z - 1, 'remote');
+      r.petKey = r.pet ? key : '';
+    }
+  }
+  for (const [peer, r] of net.remotes) if (!seen.has(peer)) removeRemote(r);
+  if (net.user && ids.length && clock - net.nameT > 3){
+    net.nameT = clock;
+    net.user.profiles(ids).then(ps => { for (const id of ids) if (ps[id] && ps[id].name) net.names[id] = ps[id].name; }).catch(() => {});
+  }
+}
+function removeRemote(r){ scene.remove(r.model.g); r.tag.remove(); if (r.pet) destroyCreature(r.pet); net.remotes.delete(r.peer); }
+function renderRemotes(){
+  for (const r of net.remotes.values()){
+    r.x += (r.tx - r.x)*0.2; r.z += (r.tz - r.z)*0.2; r.yaw = lerpAngle(r.yaw, r.tyaw, 0.2);
+    r.model.g.position.set(r.x, 0, r.z); r.model.g.rotation.y = r.yaw;
+    if (r.mv) r.walk += 0.25;
+    const sw = r.mv ? Math.sin(r.walk)*0.6 : 0;
+    r.model.legs[0].rotation.x = sw; r.model.legs[1].rotation.x = -sw; r.model.arms[0].rotation.x = -sw*0.8; r.model.arms[1].rotation.x = sw*0.8;
+    const v = new T.Vector3(r.x, 2.15, r.z).project(camera);
+    const label = nameOf(r.p) + (r.st === 'b' ? ' · em batalha' : r.st === 'd' ? ' · em duelo' : '');
+    if (r.tag.textContent !== label) r.tag.textContent = label;
+    r.tag.style.borderColor = peerColor(r.peer);
+    r.tag.style.transform = `translate(${(v.x + 1)/2*innerWidth}px, ${(1 - v.y)/2*innerHeight}px) translate(-50%, -100%)`;
+    r.tag.hidden = mode === 'title' || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1;
+  }
+  const n = net.remotes.size + 1;
+  const txt = `${n} ${n === 1 ? 'jogador' : 'jogadores'} online`;
+  if ($('online').textContent !== txt) $('online').textContent = txt;
+}
+
+// desafios: devolve {text, key} para o aviso na tela
+function netWorldStep(){
+  const me = myPeerId(); if (!me) return null;
+  if (net.challenge && clock - net.challengeAt > 20){ net.challenge = null; toast('Ninguém respondeu ao desafio.'); }
+  if (net.decline && clock - net.declineAt > 6) net.decline = null;
+  if (net.accept && clock - net.acceptAt > 12) net.accept = null;
+  if (net.challenge){
+    const tgt = net.remotes.get(net.challenge.to);
+    if (!tgt){ net.challenge = null; return null; }
+    const pr = tgt.p.presence;
+    if (pr.ac && pr.ac.from === me && pr.ac.code === net.challenge.code){ const c = net.challenge; net.challenge = null; startDuel(true, c.code, c.to); return null; }
+    if (pr.dc === net.challenge.code){ toast(`${nameOf(tgt.p)} recusou o desafio.`); net.challenge = null; return null; }
+    return {text:`Esperando ${nameOf(tgt.p)} aceitar o desafio...`};
+  }
+  for (const r of net.remotes.values()){
+    const ch = r.p.presence.ch;
+    if (!ch || ch.to !== me || r.st !== 'w' || ch.code === net.decline) continue;
+    if (pressed.KeyY){
+      if (!game.team.some(m => m.hp > 0)){ toast('Seu time está desmaiado. Cure no Centro antes.'); return null; }
+      net.accept = {from:r.peer, code:String(ch.code).slice(0, 12)}; net.acceptAt = clock; net.pubT = 0;
+      startDuel(false, net.accept.code, r.peer); return null;
+    }
+    if (pressed.KeyN){ net.decline = ch.code; net.declineAt = clock; net.pubT = 0; return null; }
+    return {text:`${nameOf(r.p)} te desafiou pra um duelo! Y aceitar · N recusar`, key:'KeyY'};
+  }
+  let best = null, bd = 3.5;
+  for (const r of net.remotes.values()){ if (r.st !== 'w') continue; const d = Math.hypot(r.x - trainer.pos.x, r.z - trainer.pos.z); if (d < bd){ bd = d; best = r; } }
+  if (!best) return null;
+  if (pressed.KeyF){
+    if (!game.team.some(m => m.hp > 0)) toast('Seu time está desmaiado. Cure no Centro antes.');
+    else { net.challenge = {to:best.peer, code:Math.random().toString(36).slice(2, 8)}; net.challengeAt = clock; net.pubT = 0; toast(`Desafio enviado pra ${nameOf(best.p)}.`); }
+  }
+  return {text:`F: desafiar ${nameOf(best.p)} pra um duelo`, key:'KeyF'};
+}
+
+function makePuppet(member){
+  const c = makeCreature(member, ARENA.x, ARENA.z + 40, 'puppet');
+  hideCreature(c); c.meshes.forEach(m => m.visible = true);
+  return c;
+}
+async function startDuel(isHost, code, oppPeer){
+  if (mode !== 'world' || net.duel) return;
+  const opp = net.remotes.get(oppPeer); if (!opp) return;
+  const mine = game.team.find(m => m.hp > 0); if (!mine) return;
+  const pr = opp.p.presence;
+  const oppM = newMember(SPECIES[pr.sp] ? pr.sp : 'lobo', clamp(pr.lv|0, 1, 100));
+  const d = net.duel = {isHost, code, oppPeer, dr:null, t:0, q:0, ev:[], evId:0, seen:0, rs:{pj:0, sp:0, jp:0}, ls:{pj:0, sp:0, jp:0}, lastQ:-1, lastSnapAt:clock, res:null, endT:0, missing:0, cd:3, oppName:nameOf(opp.p), rocks:[]};
+  mode = 'battle'; setPrompt('');
+  try { d.dr = await net.room.join('duel-' + code); }
+  catch(e){ toast('Não deu pra abrir a sala do duelo.'); net.duel = null; net.accept = null; mode = 'world'; return; }
+  if (follower){ destroyCreature(follower); follower = null; }
+  trainer.pos.set(ARENA.x + (isHost ? -4.6 : 4.6), 0, ARENA.z); trainer.yaw = isHost ? Math.PI/2 : -Math.PI/2; trainer.moving = false;
+  const myM = cloneMember(mine);
+  if (isHost){
+    const A = makeCreature(myM, ARENA.x - 2, ARENA.z, 'fighter'); A.yaw = Math.PI/2;
+    const B = makeCreature(oppM, ARENA.x + 2, ARENA.z, 'enemy'); B.yaw = -Math.PI/2;
+    battle = {pvp:true, host:true, mon:A, wild:B, member:myM, opp:oppM, center:{x:ARENA.x, z:ARENA.z}, R:ARENA.r, over:false, capture:null, faintT:0, switchCd:0};
+  } else {
+    battle = {pvp:true, host:false, pA:makePuppet(oppM), pB:makePuppet(myM), member:myM, opp:oppM, center:{x:ARENA.x, z:ARENA.z}, R:ARENA.r, over:false};
+  }
+  setHud();
+  toast(`Duelo contra ${d.oppName}: ${myM.nick} vs ${oppM.nick}!`);
+}
+const packC = c => { const a = []; for (const p of c.parts) a.push(r2(p.position.x), r2(p.position.y), r2(p.position.z), r3(p.quaternion.x), r3(p.quaternion.y), r3(p.quaternion.z), r3(p.quaternion.w)); return a; };
+const flagsOf = c => (c.ko > 0 ? 1 : 0) | (c.fainted ? 2 : 0) | (c.confused > 0 ? 4 : 0);
+function pvpHostStep(dt){
+  const d = net.duel; if (!d || !d.dr) return;
+  const P = battle.mon, W = battle.wild;
+  d.t += dt; d.cd = Math.max(0, Math.ceil(3 - d.t));
+  const locked = d.t < 3 || battle.over;
+  const v = moveInput();
+  const dPW = Math.hypot(W.torso.position.x - P.torso.position.x, W.torso.position.z - P.torso.position.z);
+  P.input = locked ? {} : {mx:v.x, mz:v.z, jump:!!pressed.Space && !P.grabs.length, lift:!!keys.Space, punch:!!(pressed.KeyJ || pressed.Mouse0), grab:!!keys.KeyK,
+    special:!!(pressed.KeyL || pressed.KeyE), face: v.lengthSq() < 0.01 || dPW < 2.6 ? W.torso.position : null};
+  const gp = d.dr.peers().find(p => p.peer === d.oppPeer);
+  const gi = gp && gp.presence && gp.presence.inp;
+  d.missing = gp ? 0 : d.missing + dt;
+  if (gi && !locked){
+    const mx = clamp(+gi.mx || 0, -1, 1), mz = clamp(+gi.mz || 0, -1, 1);
+    W.input = {mx, mz, grab:!!gi.g, lift:!!gi.l, jump:gi.jp !== d.rs.jp && !W.grabs.length, punch:gi.pj !== d.rs.pj, special:gi.sp !== d.rs.sp,
+      face: Math.hypot(mx, mz) < 0.1 || dPW < 2.6 ? P.torso.position : null};
+  } else W.input = {};
+  if (gi) d.rs = {pj:gi.pj, sp:gi.sp, jp:gi.jp};
+  if (!battle.over){
+    let res = null;
+    if (W.fainted) res = 'A';
+    else if (P.fainted) res = 'B';
+    else if (pressed.KeyR){ res = 'B'; toast('Você desistiu.'); }
+    else if (gp && gp.presence.ff){ res = 'A'; toast(`${d.oppName} desistiu.`); }
+    else if (d.missing > 5){ res = 'A'; toast(`${d.oppName} saiu do duelo.`); }
+    if (res){ d.res = res; battle.over = true; d.endT = 2.5; toast(res === 'A' ? 'Você venceu o duelo!' : 'Você perdeu o duelo.'); }
+  } else { d.endT -= dt; if (d.endT <= 0){ finishDuel(d.res === 'A'); return; } }
+  d.ev = d.ev.slice(-6);
+  d.dr.presence({snap:{q:++d.q, A:packC(P), B:packC(W), ha:Math.ceil(P.member.hp), hb:Math.ceil(W.member.hp), fa:flagsOf(P), fb:flagsOf(W), cd:d.cd,
+    cb:r2(Math.max(0, W.specialCd)), ev:d.ev, rk:rocks.slice(0, 3).map(r => [r2(r.body.position.x), r2(r.body.position.y), r2(r.body.position.z)]), res:d.res}}).catch(() => {});
+}
+function pvpGuestStep(dt){
+  const d = net.duel; if (!d || !d.dr) return;
+  d.t += dt;
+  const v = moveInput();
+  if (!battle.over){
+    if (pressed.Space) d.ls.jp++;
+    if (pressed.KeyJ || pressed.Mouse0) d.ls.pj++;
+    if (pressed.KeyL || pressed.KeyE) d.ls.sp++;
+    if (pressed.KeyR && !d.ff){ d.ff = true; toast('Você desistiu.'); }
+  }
+  d.dr.presence({inp:{mx:r2(v.x), mz:r2(v.z), g:keys.KeyK ? 1 : 0, l:keys.Space ? 1 : 0, pj:d.ls.pj, sp:d.ls.sp, jp:d.ls.jp}, ff:d.ff ? 1 : null}).catch(() => {});
+  const host = d.dr.peers().find(p => p.peer === d.oppPeer);
+  const s = host && host.presence && host.presence.snap;
+  if (s && typeof s === 'object' && s.q !== d.lastQ){
+    d.lastQ = s.q; d.lastSnapAt = clock;
+    battle.pA.tgt = s.A; battle.pB.tgt = s.B;
+    battle.opp.hp = clamp(+s.ha || 0, 0, battle.opp.maxHp); battle.member.hp = clamp(+s.hb || 0, 0, battle.member.maxHp);
+    for (const [c, f] of [[battle.pA, s.fa|0], [battle.pB, s.fb|0]]){ c.ko = f & 1 ? 1 : 0; c.fainted = !!(f & 2); }
+    d.cd = s.cd|0; d.specCd = +s.cb || 0;
+    for (const e of Array.isArray(s.ev) ? s.ev : []){
+      if (!Array.isArray(e) || !(e[0] > d.seen)) continue;
+      d.seen = e[0];
+      const pos = {x:+e[1] || 0, y:+e[2] || 0, z:+e[3] || 0};
+      floatText(pos, String(e[4]).slice(0, 24), /^#[0-9a-f]{3,8}$/i.test(e[5]) ? e[5] : '#ffffff', clamp(+e[6] || 24, 12, 44));
+      if (/^-\d/.test(String(e[4]))){ burst(pos, 10, ['#ffffff', '#ffe066'], 4); shake(0.12); }
+    }
+    const rk = Array.isArray(s.rk) ? s.rk.slice(0, 3) : [];
+    while (d.rocks.length < rk.length){ const m = mesh(rockGeo, toon('#8f887b')); scene.add(m); d.rocks.push(m); }
+    d.rocks.forEach((m, i) => { m.visible = i < rk.length; if (m.visible) m.position.set(+rk[i][0] || 0, +rk[i][1] || 0, +rk[i][2] || 0); });
+    if (s.res && !d.res){ d.res = s.res; d.endT = 2.5; battle.over = true; toast(s.res === 'B' ? 'Você venceu o duelo!' : 'Você perdeu o duelo.'); }
+  }
+  if (d.res){ d.endT -= dt; if (d.endT <= 0) finishDuel(d.res === 'B'); }
+  else if (clock - d.lastSnapAt > 8){ toast('A conexão com o oponente caiu.'); finishDuel(null); }
+}
+const _pv = new T.Vector3(), _pq = new T.Quaternion();
+function renderPuppets(){
+  for (const c of [battle.pA, battle.pB]){
+    const a = c.tgt; if (!Array.isArray(a) || a.length !== c.parts.length*7) continue;
+    c.meshes.forEach((m, i) => {
+      const o = i*7;
+      _pv.set(+a[o] || 0, +a[o + 1] || 0, +a[o + 2] || 0);
+      _pq.set(+a[o + 3] || 0, +a[o + 4] || 0, +a[o + 5] || 0, +a[o + 6] || 1).normalize();
+      if (!c.snapInit){ m.position.copy(_pv); m.quaternion.copy(_pq); } else { m.position.lerp(_pv, 0.45); m.quaternion.slerp(_pq, 0.45); }
+    });
+    c.snapInit = true;
+  }
+}
+function finishDuel(won){
+  const d = net.duel; if (!d) return;
+  if (d.dr) d.dr.leave().catch(() => {});
+  d.rocks.forEach(m => scene.remove(m));
+  net.duel = null; net.accept = null; net.challenge = null;
+  if (battle) for (const c of [battle.mon, battle.wild, battle.pA, battle.pB]) if (c && !c.dead) destroyCreature(c);
+  for (const r of rocks.slice()) removeRock(r);
+  battle = null; mode = 'world'; $('big').hidden = true;
+  if (won === true){ game.money += 80; toast('+80 moedas pela vitória no duelo!'); }
+  else if (won === false){ game.money += 20; toast('+20 moedas por participar do duelo.'); }
+  trainer.pos.set(ARENA.x + ARENA.r + 2.5, 0, ARENA.z); trainer.yaw = Math.PI/2;
+  save(); spawnFollower(); setHud();
+}
+function fighterCard(el, m, owner){
+  const sp = SPECIES[m.species], r = m.hp/m.maxHp;
+  const key = m.species + m.level + owner;
+  if (el.dataset.key !== key){
+    el.dataset.key = key;
+    el.innerHTML = `<div class="row"><span class="n"><img src="${portrait(m.species)}" alt=""><span class="nm"></span></span><span class="l">Nv. ${m.level}</span></div><div class="bar"><i></i></div><div class="meta"><span>${chip(sp.attr)} <span class="ow"></span></span><span class="hpv"></span></div>`;
+    el.querySelector('.nm').textContent = m.nick; el.querySelector('.ow').textContent = owner;
+  }
+  const bar = el.querySelector('.bar>i'); bar.style.width = r*100 + '%'; bar.style.background = hpColor(r);
+  el.querySelector('.hpv').textContent = `${Math.ceil(m.hp)}/${m.maxHp} PV`;
+}
+function updatePvpHud(){
+  const d = net.duel; if (!d) return;
+  fighterCard($('me'), battle.member, 'Você');
+  fighterCard($('wild'), battle.opp, d.oppName);
+  const cd = battle.host ? battle.mon.specialCd : (d.specCd || 0);
+  const big = $('big');
+  const cdLeft = battle.host ? Math.max(0, 3 - d.t) : (d.lastQ < 0 ? 3 : d.cd);
+  if (!d.fightAt && cdLeft <= 0) d.fightAt = clock;
+  const txt = battle.over ? (d.res === (battle.host ? 'A' : 'B') ? 'VITÓRIA!' : 'DERROTA') : cdLeft > 0 ? String(Math.ceil(cdLeft)) : clock - d.fightAt < 0.8 ? 'LUTA!' : '';
+  big.hidden = !txt; if (big.textContent !== txt) big.textContent = txt;
+  $('spec').textContent = battle.host ? (cd > 0 ? `${battle.mon.sp.specialName} em ${cd.toFixed(1)}s` : `${battle.mon.sp.specialName} pronto (L)`) : (cd > 0 ? `${SPECIES[battle.member.species].specialName} em ${cd.toFixed(1)}s` : `${SPECIES[battle.member.species].specialName} pronto (L)`);
+}
+
+/* ================= Entrada ================= */
+const keys = {}, pressed = {};
+addEventListener('keydown', e => {
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code)) e.preventDefault();
+  if (!keys[e.code]) pressed[e.code] = true;
+  keys[e.code] = true;
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+document.querySelectorAll('#touch button').forEach(b => {
+  const k = b.dataset.k;
+  b.addEventListener('pointerdown', e => { e.preventDefault(); if (!keys[k]) pressed[k] = true; keys[k] = true; });
+  const up = () => { keys[k] = false; };
+  b.addEventListener('pointerup', up); b.addEventListener('pointerleave', up); b.addEventListener('pointercancel', up);
+});
+const mouse = {x:0, y:0, has:false, world:new T.Vector3()};
+const raycaster = new T.Raycaster(), groundPlane = new T.Plane(new T.Vector3(0,1,0), 0);
+renderer.domElement.addEventListener('pointermove', e => { if (e.pointerType === 'mouse'){ mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true; } });
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+renderer.domElement.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'mouse') return;
+  mouse.x = e.clientX; mouse.y = e.clientY; mouse.has = true;
+  if (e.button === 0) pressed.Mouse0 = true;
+  if (e.button === 2) pressed.Mouse2 = true;
+});
+function mouseGround(){
+  raycaster.setFromCamera(new T.Vector2(mouse.x/innerWidth*2 - 1, -(mouse.y/innerHeight)*2 + 1), camera);
+  raycaster.ray.intersectPlane(groundPlane, mouse.world);
+  return mouse.world;
+}
+function moveInput(){
+  let ix = 0, iz = 0;
+  if (keys.KeyW || keys.ArrowUp) iz += 1;
+  if (keys.KeyS || keys.ArrowDown) iz -= 1;
+  if (keys.KeyD || keys.ArrowRight) ix += 1;
+  if (keys.KeyA || keys.ArrowLeft) ix -= 1;
+  const v = new T.Vector3().addScaledVector(FWD, iz).addScaledVector(RIGHT, ix);
+  if (v.lengthSq() > 1) v.normalize();
+  return v;
+}
+
+/* ================= Loop ================= */
+let clock = 0;
+function step(dt){
+  clock += dt;
+  trainer.throwT -= dt;
+  if (mode === 'world'){
+    const v = moveInput();
+    trainer.moving = v.lengthSq() > 0.01;
+    if (trainer.moving){ moveTrainer(v.x*5.5*dt, v.z*5.5*dt); trainer.yaw = lerpAngle(trainer.yaw, Math.atan2(v.x, v.z), 0.25); }
+    if (follower && !follower.removed) aiFollow(follower);
+    for (const w of wilds()) if (!w.removed) aiWander(w, dt);
+    const nearHeal = Math.hypot(trainer.pos.x - HEAL_SPOT.x, trainer.pos.z - HEAL_SPOT.z) < 1.6;
+    const nearShop = Math.hypot(trainer.pos.x - SHOP_SPOT.x, trainer.pos.z - SHOP_SPOT.z) < 1.5;
+    const np = net.room ? netWorldStep() : null;
+    if (np) setPrompt(np.text, np.key); else setPrompt(nearHeal ? 'E: curar seu time' : nearShop ? 'E: entrar na loja' : '', 'KeyE');
+    if (nearHeal && pressed.KeyE){ healAll(); toast('Seu time foi curado!'); }
+    if (nearShop && pressed.KeyE) showShop();
+    if (pressed.KeyI) showBag();
+    if (pressed.KeyC) cycleCapture();
+    for (let i = 1; i <= 6; i++) if (pressed['Digit' + i]) switchTo(i - 1);
+    if (pressed.Tab) showTeam();
+    if (mode === 'world' && follower && !follower.fainted){
+      for (const w of wilds()){
+        if (w.removed || w.cool > 0) continue;
+        if (Math.hypot(w.torso.position.x - trainer.pos.x, w.torso.position.z - trainer.pos.z) < 3.4){ startBattle(w); break; }
+      }
+    }
+  } else if (mode === 'battle' && battle && battle.pvp){
+    trainer.moving = false; setPrompt('');
+    if (battle.host) pvpHostStep(dt); else pvpGuestStep(dt);
+  } else if (mode === 'battle' && battle){
+    trainer.moving = false;
+    const P = battle.mon, v = moveInput();
+    if (!P.removed){
+      const o = opponentOf(P);
+      const near = o && Math.hypot(o.torso.position.x - P.torso.position.x, o.torso.position.z - P.torso.position.z) < 2.6;
+      P.input = {
+        mx:v.x, mz:v.z, jump:!!pressed.Space && !P.grabs.length, lift:!!keys.Space,
+        punch:!!(pressed.KeyJ || pressed.Mouse0), grab:!!keys.KeyK, special:!!(pressed.KeyL || pressed.KeyE),
+        face: o && (v.lengthSq() < 0.01 || near) ? o.torso.position : null
+      };
+    }
+    if (!battle.wild.removed) aiFight(battle.wild, dt);
+    for (const w of wilds()) if (!w.removed) aiWander(w, dt);
+    const aim = mouse.has ? mouseGround() : null;
+    reticle.visible = !!aim && !battle.capture && !battle.over;
+    if (aim) reticle.position.set(aim.x, 0.06, aim.z);
+    if (pressed.Mouse2 || pressed.KeyQ){ if (aim) throwBall(aim); else if (!battle.wild.removed) throwBall(battle.wild.torso.position); }
+    if (pressed.KeyT && !battle.wild.removed) throwBall(battle.wild.torso.position);
+    if (pressed.KeyR && !battle.capture) endBattle('flee');
+    if (pressed.KeyC) cycleCapture();
+    if (pressed.KeyI) showBag();
+    for (let i = 1; i <= 6; i++) if (pressed['Digit' + i]) switchTo(i - 1);
+    setPrompt('');
+  }
+  for (const k in pressed) delete pressed[k];
+  if (mode === 'world' || mode === 'battle') updateSpawns(dt);
+  if (net.room && mode !== 'title'){
+    updateRemotes(); publishLobby(dt);
+    for (const r of net.remotes.values()) if (r.pet && !r.pet.removed) aiFollowTo(r.pet, r.x, r.z, r.yaw);
+  }
+
+  for (const c of creatures) updateCreature(c, dt);
+  const tb = trainer.body;
+  const tvx = (trainer.pos.x - tb.position.x)/dt, tvz = (trainer.pos.z - tb.position.z)/dt;
+  if (Math.hypot(tvx, tvz) > 10) tb.velocity.set(0, 0, 0); else tb.velocity.set(tvx, 0, tvz);
+  tb.position.set(trainer.pos.x, 0.8, trainer.pos.z);
+  world.step(dt);
+  processContacts();
+  processHits();
+  if (battle && !(battle.pvp && !battle.host)) battleUpdate(dt);
+
+  for (const b of balls.slice()){
+    if (battle && battle.capture && battle.capture.ball === b) continue;
+    if ((!b.body.used && clock - b.body.born > 4) || b.body.position.y < -5) removeBall(b);
+  }
+  for (const r of rocks.slice()) if (clock - r.body.born > (r.body.spent ? 1.2 : 3)) removeRock(r);
+  for (let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i]; p.life -= dt; p.vy -= 18*dt;
+    p.m.position.x += p.vx*dt; p.m.position.y += p.vy*dt; p.m.position.z += p.vz*dt;
+    if (p.m.position.y < 0.05){ p.m.position.y = 0.05; p.vy *= -0.3; p.vx *= 0.7; p.vz *= 0.7; }
+    if (p.life <= 0){ scene.remove(p.m); particles.splice(i, 1); }
+  }
+  for (let i = rings.length - 1; i >= 0; i--){
+    const r = rings[i]; r.t += dt; const k = r.t/0.5;
+    r.m.scale.setScalar(1 + k*r.max); r.m.material.opacity = 1 - k;
+    if (k >= 1){ scene.remove(r.m); rings.splice(i, 1); }
+  }
+}
+
+function render(){
+  for (const c of creatures) syncCreature(c);
+  if (battle && battle.pvp && !battle.host) renderPuppets();
+  for (const b of balls){
+    b.mesh.position.copy(b.body.position); b.mesh.quaternion.copy(b.body.quaternion);
+    if (battle && battle.capture && battle.capture.ball === b){ b.mesh.rotation.set(0, 0, battle.capture.wob || 0); b.mesh.position.y = Math.max(0.6, b.body.position.y) + Math.sin(clock*3)*0.04; b.mesh.scale.setScalar(1.6); }
+    if (b.sprout) b.sprout.scale.setScalar(Math.min(1, b.sprout.scale.x + 0.04));
+  }
+  for (const r of rocks){ r.mesh.position.copy(r.body.position); r.mesh.quaternion.copy(r.body.quaternion); }
+  const tm = trainer.mesh;
+  tm.position.set(trainer.pos.x, 0, trainer.pos.z); tm.rotation.y = trainer.yaw;
+  if (trainer.moving) trainer.walk += 0.25;
+  const sw = trainer.moving ? Math.sin(trainer.walk)*0.6 : 0;
+  trainer.legs[0].rotation.x = sw; trainer.legs[1].rotation.x = -sw;
+  trainer.arms[0].rotation.x = -sw*0.8; trainer.arms[1].rotation.x = trainer.throwT > 0 ? -2.6 + (0.6 - trainer.throwT)*4 : sw*0.8;
+  let tgt, size;
+  if (battle){
+    const pts = battle.pvp && !battle.host
+      ? [battle.pA, battle.pB].map(c => c.meshes[c.parts.indexOf(c.torso)].position)
+      : [battle.mon, battle.wild].filter(c => !c.removed).map(c => c.torso.position);
+    if (battle.capture) pts.push(battle.capture.ball.body.position);
+    pts.push({x:trainer.pos.x, z:trainer.pos.z});
+    let minx = Infinity, maxx = -Infinity, minz = Infinity, maxz = -Infinity;
+    for (const p of pts){ minx = Math.min(minx, p.x); maxx = Math.max(maxx, p.x); minz = Math.min(minz, p.z); maxz = Math.max(maxz, p.z); }
+    tgt = new T.Vector3((minx + maxx)/2, 0.5, (minz + maxz)/2);
+    size = clamp(Math.hypot(maxx - minx, maxz - minz)*0.4 + 3, 4.2, 8);
+  } else { tgt = new T.Vector3(trainer.pos.x, 0.5, trainer.pos.z); size = 7.5; }
+  if (innerWidth < innerHeight) size *= 1.25;
+  cam.target.lerp(tgt, 0.08);
+  cam.cur += (size - cam.cur)*0.05;
+  const a = innerWidth/innerHeight;
+  camera.left = -cam.cur*a; camera.right = cam.cur*a; camera.top = cam.cur; camera.bottom = -cam.cur; camera.updateProjectionMatrix();
+  cam.shake *= 0.88;
+  const sh = new T.Vector3(rand(-1,1), rand(-1,1), rand(-1,1)).multiplyScalar(cam.shake);
+  camera.position.copy(cam.target).add(ISO).add(sh);
+  camera.lookAt(cam.target.clone().add(sh));
+  sun.position.set(cam.target.x + 10, 22, cam.target.z + 6); sun.target.position.copy(cam.target);
+  renderer.render(scene, camera);
+  for (let i = floats.length - 1; i >= 0; i--){
+    const f = floats[i]; f.life -= 1/60; f.p.y += 0.02;
+    const v = f.p.clone().project(camera);
+    f.el.style.transform = `translate(${(v.x + 1)/2*innerWidth}px, ${(1 - v.y)/2*innerHeight}px) translate(-50%, -50%)`;
+    f.el.style.opacity = clamp(f.life*1.6, 0, 1);
+    if (f.life <= 0){ f.el.remove(); floats.splice(i, 1); }
+  }
+  if (net.room) renderRemotes();
+  if (battle) battle.pvp ? updatePvpHud() : updateBattleHud();
+}
+
+/* ================= HUD e menus ================= */
+const hpColor = r => r > 0.5 ? 'var(--hp)' : r > 0.2 ? 'var(--hpmid)' : 'var(--hplow)';
+const chip = attr => `<span class="chip ${attr}">${ATTR[attr].short}</span>`;
+let teamKey = '';
+function renderTeam(){
+  const lead = battle ? battle.member : game.team[0];
+  const key = game.team.map(m => `${m.species}${m.level}${Math.ceil(m.hp)}${m.maxHp}`).join('|') + game.team.indexOf(lead);
+  if (key === teamKey) return; teamKey = key;
+  $('team').innerHTML = game.team.map((m, i) => {
+    const r = m.hp/m.maxHp, sp = SPECIES[m.species];
+    return `<div class="tm card-ui ${m === lead ? 'lead' : ''} ${m.hp <= 0 ? 'out' : ''}"><img src="${portrait(m.species)}" alt="${sp.name}"><span class="n">${i + 1}. ${m.nick}</span><span class="l">${chip(sp.attr)} Nv. ${m.level}</span><div class="bar"><i style="width:${r*100}%;background:${hpColor(r)}"></i></div></div>`;
+  }).join('');
+}
+let wildKey = '';
+function updateBattleHud(){
+  renderTeam();
+  const m = battle.wild.member, sp = SPECIES[m.species];
+  const key = m.species + m.level + battle.member.species;
+  if (key !== wildKey){
+    const mine = SPECIES[battle.member.species];
+    const a = BEATS[mine.attr] === sp.attr ? `<span style="color:var(--agi)">Vantagem sua: ${ATTR[mine.attr].name} vence ${ATTR[sp.attr].name}</span>`
+      : BEATS[sp.attr] === mine.attr ? `<span style="color:var(--str)">Desvantagem: ${ATTR[sp.attr].name} vence ${ATTR[mine.attr].name}</span>`
+      : `<span>Atributos iguais</span>`;
+    $('wild').innerHTML = `<div class="row"><span class="n"><img src="${portrait(m.species)}" alt="">${m.nick}</span><span class="l">Nv. ${m.level}</span></div><div class="bar"><i></i></div><div class="meta"><span>${chip(sp.attr)} ${ATTR[sp.attr].name}</span><span id="whp"></span></div><div id="matchup">${a}</div>`;
+    wildKey = key;
+  }
+  const r = m.hp/m.maxHp, bar = $('wild').querySelector('.bar>i');
+  bar.style.width = r*100 + '%'; bar.style.background = hpColor(r);
+  $('whp').textContent = `${Math.ceil(m.hp)}/${m.maxHp} PV`;
+  const cd = battle.mon.specialCd;
+  $('spec').textContent = cd > 0 ? `${battle.mon.sp.specialName} em ${cd.toFixed(1)}s` : `${battle.mon.sp.specialName} pronto (L)`;
+  $('spec').style.opacity = cd > 0 ? 0.6 : 1;
+}
+function setHud(){
+  const inBattle = mode === 'battle';
+  const pvp = !!(battle && battle.pvp);
+  $('team').hidden = mode === 'title' || pvp;
+  $('wild').hidden = !inBattle || !battle;
+  $('me').hidden = !pvp;
+  $('big').hidden = !pvp;
+  $('pills').hidden = mode === 'title';
+  $('online').hidden = !net.room || mode === 'title';
+  $('spec').hidden = !inBattle;
+  $('teamBtn').hidden = inBattle;
+  $('bagBtn').hidden = pvp;
+  $('capSel').hidden = pvp;
+  $('money').textContent = `${game.money} moedas`;
+  $('capSel').innerHTML = `<img src="${itemIcon(game.sel)}" alt="">${ITEMS[game.sel].name} ×${count(game.sel)} <span class="small">(C)</span>`;
+  $('help').hidden = mode === 'title';
+  $('help').innerHTML = pvp
+    ? 'DUELO · <kbd>WASD</kbd> mover · <kbd>J</kbd>/clique ataque · <kbd>K</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>L</kbd> especial · <kbd>R</kbd> desistir'
+    : inBattle
+    ? '<kbd>WASD</kbd> mover · <kbd>J</kbd>/clique ataque · <kbd>K</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>L</kbd> especial · <kbd>Q</kbd>/botão direito arremessa captura · <kbd>C</kbd> troca captura · <kbd>I</kbd> mochila · <kbd>1</kbd>-<kbd>6</kbd> trocar · <kbd>R</kbd> fugir'
+    : '<kbd>WASD</kbd> andar · chegue perto de um animal no mato alto pra batalhar · <kbd>I</kbd> mochila · <kbd>Tab</kbd> time · <kbd>E</kbd> no tapete do Centro ou da Loja' + (net.room ? ' · <kbd>F</kbd> perto de um amigo: desafiar pra duelo' : '');
+  teamKey = ''; wildKey = ''; $('wild').dataset.key = ''; $('me').dataset.key = ''; renderTeam();
+}
+let promptText = null, promptKey = null;
+function setPrompt(t, key){ promptKey = t ? key || null : null; if (t === promptText) return; promptText = t; $('prompt').hidden = !t; $('prompt').textContent = t; }
+$('prompt').onclick = () => { if (promptKey) pressed[promptKey] = true; };
+
+const triHtml = `<div class="tri">${chip('forca')} vence ${chip('agilidade')} · ${chip('agilidade')} vence ${chip('inteligencia')} · ${chip('inteligencia')} vence ${chip('forca')}</div>`;
+function attrBars(m){
+  const s = stats(m), max = 50;
+  const row = (k, v, col) => `<span>${k}</span><span class="b"><i style="width:${clamp(v/max*100, 4, 100)}%;background:${col}"></i></span><span>${v.toFixed(0)}</span>`;
+  return `<div class="attrs">${row('FOR', s.str, 'var(--str)')}${row('AGI', s.agi, 'var(--agi)')}${row('INT', s.int, 'var(--int)')}</div>`;
+}
+function monCard(m, opts={}){
+  const sp = SPECIES[m.species], s = stats(m);
+  return `<div class="mon ${opts.lead ? 'lead' : ''}">
+    <img src="${portrait(m.species)}" alt="${sp.name}">
+    <div class="t">${m.nick}${chip(sp.attr)}</div>
+    ${opts.starter ? `<p>${sp.desc}</p>` : `<div class="small">Nv. ${m.level} · XP ${m.xp}/${xpNext(m)} · PV ${Math.ceil(m.hp)}/${m.maxHp}</div>`}
+    ${attrBars(m)}
+    <div class="small">Especial: ${sp.specialName} · ${sp.plan === 'quad' ? 'ataca mordendo' : 'ataca socando'}</div>
+    <div class="small">Velocidade ${s.speed.toFixed(2)} · Esquiva ${Math.round(s.dodge*100)}% · Recarga do especial ${s.specCd.toFixed(1)}s</div>
+    ${opts.starter ? `<button class="primary" data-starter="${m.species}">Escolher ${sp.name}</button>` : opts.idx > 0 && m.hp > 0 ? `<button data-lead="${opts.idx}">Levar comigo</button>` : ''}
+  </div>`;
+}
+function showTitle(){
+  mode = 'title'; setHud();
+  $('overlay').hidden = false;
+  $('card').innerHTML = `<h1 class="logo">Pancadamon</h1>
+    <p class="sub">Animais molengas que brigam de verdade. Enfraqueça, agarre, arremesse e capture.</p>
+    <h2>Escolha seu primeiro animal</h2>
+    ${triHtml}
+    <div class="grid">${STARTERS.map(k => monCard(newMember(k, 5), {starter:true})).join('')}</div>
+    <div class="controls">
+      <div><kbd>WASD</kbd> andar / mover o animal</div><div><kbd>J</kbd> ou clique: soco ou mordida</div>
+      <div><kbd>K</kbd> segurar: agarrar ou morder e segurar</div><div><kbd>Espaço</kbd> pular, ou levantar quem você pegou</div>
+      <div><kbd>L</kbd> golpe especial do animal</div><div><kbd>Q</kbd> ou botão direito: arremessar bolota na mira</div>
+      <div><kbd>I</kbd> mochila: usar e ver itens</div><div><kbd>E</kbd> na loja: comprar cura e captura</div>
+    </div>`;
+  $('card').querySelectorAll('[data-starter]').forEach(b => b.onclick = () => {
+    game = {team:[newMember(b.dataset.starter, 5)], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota'};
+    save(); enterWorld(); toast(`Você escolheu ${SPECIES[b.dataset.starter].name}! Procure animais no mato alto.`);
+  });
+}
+/* Menus: abrir um menu pausa o jogo (inclusive no meio da batalha) */
+let menuReturn = 'world', menuKind = null;
+function openMenu(kind, html){
+  if (mode !== 'menu') menuReturn = mode;
+  mode = 'menu'; menuKind = kind;
+  $('overlay').hidden = false; $('card').innerHTML = html;
+  for (const k in keys) keys[k] = false;
+}
+function closeMenu(){
+  if (mode !== 'menu') return;
+  $('overlay').hidden = true; mode = menuReturn; menuKind = null; setHud();
+}
+addEventListener('keydown', e => {
+  if (mode !== 'menu') return;
+  if (e.code === 'Escape' || (e.code === 'Tab' && menuKind === 'team') || (e.code === 'KeyI' && menuKind === 'bag') || (e.code === 'KeyE' && menuKind === 'shop')){
+    closeMenu(); delete pressed[e.code];
+  }
+});
+
+function showTeam(){
+  if (mode !== 'world' && !(mode === 'menu' && menuKind === 'team')) return;
+  openMenu('team', `<h2>Seu time</h2>${triHtml}
+    <div class="grid">${game.team.map((m, i) => monCard(m, {idx:i, lead:i === 0})).join('')}</div>
+    ${game.box.length ? `<p class="small" style="margin-top:12px">Na caixa: ${game.box.map(m => m.nick + ' Nv. ' + m.level).join(', ')}</p>` : ''}
+    <div class="actions"><button class="primary" id="closeMenu">Voltar (Tab)</button><button id="resetBtn">Novo jogo</button></div>
+    <p class="small" id="resetNote" hidden>Clique em "Novo jogo" de novo para apagar o progresso.</p>`);
+  $('closeMenu').onclick = closeMenu;
+  $('card').querySelectorAll('[data-lead]').forEach(b => b.onclick = () => { mode = 'world'; switchTo(+b.dataset.lead); showTeam(); });
+  let armed = false;
+  $('resetBtn').onclick = () => { if (armed){ try{ localStorage.removeItem(SAVE_KEY); }catch(e){} location.reload(); } else { armed = true; $('resetNote').hidden = false; } };
+}
+$('teamBtn').onclick = showTeam;
+
+function itemCard(k, inner, sel){
+  const it = ITEMS[k];
+  return `<div class="item ${sel ? 'sel' : ''}"><img src="${itemIcon(k)}" alt=""><div class="nm">${it.name}</div><div class="ds">${it.desc}</div><div class="ds">Na mochila: ${count(k)}</div><div class="row">${inner}</div></div>`;
+}
+function showShop(){
+  const sections = [['cura', 'Cura'], ['captura', 'Captura']];
+  const html = `<div class="shophead"><h2 style="margin:0">Loja do Mato</h2><span class="coins">${game.money} moedas</span></div>
+    <p class="hint">Você ganha moedas vencendo e capturando animais.</p>
+    ${sections.map(([cat, title]) => `<div class="sect">${title}</div><div class="items">${Object.keys(ITEMS).filter(k => ITEMS[k].cat === cat).map(k => {
+      const p = ITEMS[k].price;
+      return itemCard(k, `<span class="qty">${p} moedas</span><span><button data-buy="${k}" data-n="1" ${game.money < p ? 'disabled' : ''}>Comprar</button> <button data-buy="${k}" data-n="5" ${game.money < p*5 ? 'disabled' : ''}>×5</button></span>`);
+    }).join('')}</div>`).join('')}
+    <div class="actions"><button class="primary" id="closeMenu">Sair da loja (E)</button></div>`;
+  openMenu('shop', html);
+  $('closeMenu').onclick = closeMenu;
+  $('card').querySelectorAll('[data-buy]').forEach(b => b.onclick = () => {
+    const k = b.dataset.buy, n = +b.dataset.n, cost = ITEMS[k].price*n;
+    if (game.money < cost) return;
+    game.money -= cost; addItem(k, n); save();
+    const top = $('card').scrollTop; showShop(); $('card').scrollTop = top;
+    toast(`Comprou ${n}× ${ITEMS[k].name}.`);
+  });
+}
+let bagPick = null;
+function showBag(){
+  if (battle && battle.pvp) return;
+  const inBattle = menuReturn === 'battle' || mode === 'battle';
+  const owned = Object.keys(ITEMS).filter(k => count(k) > 0);
+  const cure = owned.filter(k => ITEMS[k].cat === 'cura'), cap = owned.filter(k => ITEMS[k].cat === 'captura');
+  if (bagPick && !cure.includes(bagPick)) bagPick = null;
+  let targets = '';
+  if (bagPick){
+    const it = ITEMS[bagPick];
+    targets = `<div class="sect">Usar ${it.name} em quem?</div><div class="targets">${game.team.map((m, i) => {
+      const ok = it.revive ? m.hp <= 0 : m.hp > 0 && m.hp < m.maxHp;
+      return `<button data-use="${i}" ${ok ? '' : 'disabled'}><img src="${portrait(m.species)}" alt="">${m.nick} ${Math.ceil(m.hp)}/${m.maxHp}</button>`;
+    }).join('')}</div>`;
+  }
+  const html = `<div class="shophead"><h2 style="margin:0">Mochila</h2><span class="coins">${game.money} moedas</span></div>
+    ${inBattle ? '<p class="hint">Batalha pausada enquanto a mochila está aberta.</p>' : ''}
+    <div class="sect">Cura</div>
+    ${cure.length ? `<div class="items">${cure.map(k => itemCard(k, `<span class="qty">×${count(k)}</span><button data-pick="${k}">${bagPick === k ? 'Escolhido' : 'Usar'}</button>`, bagPick === k)).join('')}</div>` : '<p class="hint">Nenhum item de cura. Compre na loja.</p>'}
+    ${targets}
+    <div class="sect">Captura</div>
+    ${cap.length ? `<div class="items">${cap.map(k => itemCard(k, `<span class="qty">×${count(k)}</span><button data-sel="${k}" ${game.sel === k ? 'disabled' : ''}>${game.sel === k ? 'Equipado' : 'Equipar'}</button>`, game.sel === k)).join('')}</div>` : '<p class="hint">Nenhum item de captura. Compre na loja.</p>'}
+    <p class="hint">O item equipado é o que você arremessa com Q ou botão direito.</p>
+    <div class="actions"><button class="primary" id="closeMenu">Fechar (I)</button></div>`;
+  openMenu('bag', html);
+  $('closeMenu').onclick = () => { bagPick = null; closeMenu(); };
+  $('card').querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { bagPick = b.dataset.pick; showBag(); });
+  $('card').querySelectorAll('[data-sel]').forEach(b => b.onclick = () => { game.sel = b.dataset.sel; save(); showBag(); });
+  $('card').querySelectorAll('[data-use]').forEach(b => b.onclick = () => { useItem(bagPick, game.team[+b.dataset.use]); showBag(); });
+}
+function useItem(k, m){
+  const it = ITEMS[k];
+  if (!it || count(k) <= 0 || !m) return;
+  if (it.revive){
+    if (m.hp > 0) return;
+    m.hp = Math.ceil(m.maxHp*it.revive);
+    if (battle && battle.member === m && battle.mon.fainted){ battle.mon.fainted = false; battle.mon.ko = 1; battle.faintT = 0; }
+    toast(`${m.nick} acordou!`);
+  } else {
+    if (m.hp <= 0 || m.hp >= m.maxHp) return;
+    const before = m.hp; m.hp = Math.min(m.maxHp, m.hp + it.heal);
+    toast(`${m.nick} recuperou ${Math.round(m.hp - before)} PV.`);
+  }
+  addItem(k, -1); save(); teamKey = ''; renderTeam();
+  if (mode === 'menu' && menuReturn === 'world' && !follower) spawnFollower();
+}
+$('bagBtn').onclick = () => { if (mode === 'world' || mode === 'battle') showBag(); };
+function enterWorld(){
+  $('overlay').hidden = true; mode = 'world';
+  if (!game.team.some(m => m.hp > 0)) healAll();
+  spawnFollower(); setHud();
+  for (const p of PATCHES){ let n = creatures.filter(c => c.patch === p).length; for (let i = 0; i < 6 && n < PER_PATCH; i++) if (spawnWild(p, false)) n++; }
+}
+
+/* ================= Início ================= */
+resize();
+let last = performance.now(), acc = 0;
+function frame(now){
+  acc += Math.min(100, now - last); last = now;
+  let n = 0;
+  while (acc >= 1000/60 && n < 4){ if (mode !== 'menu') step(1/60); acc -= 1000/60; n++; }
+  if (n === 4) acc = 0;
+  render();
+  requestAnimationFrame(frame);
+}
+if (load()){ enterWorld(); toast('Bem-vindo de volta!'); } else showTitle();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
