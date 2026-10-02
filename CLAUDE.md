@@ -1,0 +1,109 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Pancadamon is a Pokémon-like game in isometric 3D where the animals are active ragdolls (Gang Beasts style). The whole game is one file, `index.html` (HTML + CSS + JS, ~2.5k lines). It loads three.js r128 and cannon.js 0.6.2 as UMD globals (`THREE`/`T`, `CANNON`/`C`) from cdnjs.
+
+There is no build, no package manager, no linter and no test suite.
+
+All player-facing text and code comments are Brazilian Portuguese; keep them that way.
+
+## Running and testing
+
+- Run the local server: `powershell -ExecutionPolicy Bypass -File dev/serve.ps1`.
+  - `http://localhost:8765/` serves the single-player game.
+  - `http://localhost:8765/mp` injects `dev/mock-room.js`, a BroadcastChannel fake of the claude.ai `room`/`user` capabilities. Open it in two tabs to test multiplayer.
+  - In Claude Code, `.claude/launch.json` defines this server as `pancadamon`, so `preview_start` works.
+- Node and Python are not installed on this machine. Verify behavior in the browser pane with `javascript_tool`.
+- **Drive the simulation by hand.** A hidden pane throttles `requestAnimationFrame`, so call `step(1/60)` in loops and then `render()` instead of waiting. Everything is a top-level global:
+
+  ```js
+  // e.g. force a wild battle next to the trainer and win it
+  const w = wilds()[0];
+  trainer.pos.set(w.torso.position.x - 2.4, 0, w.torso.position.z - 2.4);
+  showTeleport(follower, trainer.pos.x - 0.8, trainer.pos.z - 0.8);
+  w.cool = 0;
+  for (let i = 0; i < 5; i++) step(1/60);          // battle starts
+  battle.wild.member.hp = 0; battle.wild.fainted = true;
+  for (let i = 0; i < 200 && battle; i++) step(1/60);
+  ```
+
+- **Simulate input** by setting `keys.KeyX = true` (held) or `pressed.KeyX = true` (one frame) before a `step`.
+- **Watch for stale console errors.** The console keeps old errors across reloads; check line numbers and stack frames before trusting one.
+- **Floating damage texts** only advance inside `render()`, so remove `floats` before taking screenshots after a fast simulation.
+
+## Shipping (two targets)
+
+1. **claude.ai artifact (the main link, the only place multiplayer works):** https://claude.ai/artifact/96RbpF5LTTkYbGMrGLcBNY
+   - The Artifact tool wraps content in its own doctype/head/body, so publish a **body-only** copy: strip the 7-line wrapper at the top of `index.html` and the 2 closing lines at the end, write the result to the scratchpad, and publish that file with the `url` above.
+   - Capabilities `{room: {}, user: {scopes: ["profile"]}}` are stored on the artifact. Omit `capabilities` on republish to keep them.
+2. **GitHub:** `git@github.com:ReiDoBrasfooty/Pancadamon.git`, branch `main`. GitHub Pages serves `index.html` at https://reidobrasfooty.github.io/Pancadamon/ (single-player only).
+   - The repo-local git identity is already set (ReiDoBrasfooty).
+   - `gh` is not installed. Push over SSH: `GIT_SSH_COMMAND="ssh -o BatchMode=yes" git push`.
+
+## Architecture (sections of `index.html`, in order)
+
+**Data:**
+- `ATTR` and `BEATS` define the class triangle: Força > Agilidade > Inteligência > Força, applied via `adv()` (×1.3 / ×0.8).
+- `SPECIES` has 10 animals. Each has `plan` (`biped` | `quad`), `feat` (the visual builder key), `base`/`grow` for [FOR, AGI, INT], and `special`.
+- `stats(member)` derives every combat number (HP, power, speed, dodge, special cooldown, etc.) from level. Members only store `{species, level, xp, hp, maxHp, nick}`.
+- The team holds at most `TEAM_MAX` (5) members; the rest live in `game.box`, managed by `showBox()` at the terminal next to the Centro (`BOX_SPOT`).
+- `ITEMS` holds cure and capture items. Capture items are a nut or seed (Bolota/Pinha/Coco/Semente), each with a `mult`.
+- The save lives in `localStorage` under `pancadamon3d_v2`. `load()` migrates older shapes, so keep it backward compatible.
+
+**Physics:**
+- Every creature gets its own collision bit `16 << slot` from `slotFree` (25 slots). This keeps its parts from colliding with each other.
+- `ALL = 0x3FFFFFFF`. Fixed groups are `G_GROUND`, `G_STATIC`, `G_BALL` and `G_TRAINER`.
+- Anything that creates creatures must respect the slot pool; `spawnWild` checks `slotFree.length`.
+
+**Active ragdoll:**
+- `makeCreature` builds cannon bodies and `PointToPointConstraint` joints. Its meshes are separate scene objects in the **same order as `parts`**, with the head always last.
+- `updateCreature` keeps the animal standing and moving:
+  - a hover spring holds the torso at height `H` while grounded;
+  - `drive()` turns each part toward a target orientation (built with `yawLocal`), which produces walk gait, punches and arm poses;
+  - KO and fainted states simply skip control, so the body goes limp.
+- `fixJoints()` runs right after `world.step`: it snaps any part that drifted more than `JOINT_SLACK` from its joint back onto it, so limbs never visibly detach.
+- Bipeds strike and grab with their arms; quadrupeds bite and grab with their head. The code uses `c.strikers` / `c.grabbers` and each part's `body.tip` for this.
+
+**Hits and grabs:**
+- cannon `collide` events only push onto `hitQueue`. `processHits()` handles them **after** `world.step`. Never add or remove bodies or constraints inside a cannon event.
+- Grabs are detected from `world.contacts` in `processContacts()`.
+
+**Visuals:**
+- `makeCreatureMeshes` switches on `feat`.
+- `add(parent, geo, mat, pos, scale, rot, shadow=true)` automatically adds an inverted-hull outline.
+- Googly eyes use `updatePupils()`, a spring per pupil driven by the head's world acceleration and gravity. The same function animates the trainer and NPC eyes.
+- `syncCreature` copies body transforms to meshes. It skips this for `role === 'puppet'`, whose meshes are driven directly from network snapshots.
+
+**Game flow:**
+- `mode` is `title` | `world` | `battle` | `menu`. `menu` pauses `step()`, even mid-battle.
+- `battle` holds the current fight:
+  - wild fights end through `endBattle` → `finishBattle`;
+  - XP goes to alive team members, full for the ones in `battle.fought` and half for the rest.
+- Each entry of `PATCHES` keeps `PER_PATCH` wild animals; `updateSpawns` refills them.
+
+**Map:**
+- The trainer and NPCs collide using `colliders` (circles) and `rects` (AABBs) through `resolveCollision`. Creatures use static cannon bodies instead, so solid scenery needs both (`solidRect` / `solidCircle` do this).
+- Repeated small scenery (grass tufts, flowers, pebbles) goes through `instanced()` to keep draw calls low. `paths` records every `pathStrip` so decoration can avoid them.
+- `ZONES` drive the area-name banner and keep random decoration out of named places. `buildPlaces` must run before `buildNature`, because `blocked()` reads `ZONES`, `rects` and `colliders`.
+
+**Multiplayer (`net`):**
+- It uses only `room` presence, never `emit`, because viewers without edit rights cannot emit on topics.
+- **Lobby:** each player's presence carries position, lead animal and challenge/accept/decline fields. Other players render as trainer models with a locally simulated pet.
+- **Duels:** they run in the named room `duel-<code>`, with the challenger as host.
+  - The host simulates both fighters and publishes `snap` (packed part transforms, HP, events) in its presence.
+  - The guest publishes `inp`, with press counters so a dropped message can't lose a button press.
+  - The guest renders the fight with puppets.
+- `window.claude.use('room')` resolves `null` outside claude.ai. Every net path must degrade to single-player.
+
+## Conventions
+
+- **Controls stay around WASD:**
+  - Battle: Q / click attack, E (hold) grab, Space jump/lift, F special, R / right-click throw capture item, C cycle capture item, X flee/forfeit.
+  - Menus and map: Z bag, Tab team, 1–5 switch animal, E interact.
+  - Duels: F challenge, E accept, X decline.
+  - When you change a key, update the help text in `setHud`, the title screen list, the touch buttons (`data-k`) and the README.
+- **Theming:** CSS colors go through the `:root` tokens, which have light and dark variants.
+- **Untrusted data:** other players' data (names, presence, snapshot text) is untrusted. Set it with `textContent` and clamp numbers.
