@@ -244,7 +244,12 @@ sun.shadow.bias = -0.0008;
 scene.add(sun, sun.target);
 
 const mats = {};
-const toon = c => mats['t'+c] || (mats['t'+c] = new T.MeshToonMaterial({color:c}));
+// sombreamento de desenho animado em 3 tons
+const toonGrad = (() => { const t = new T.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, T.LuminanceFormat); t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
+const toon = c => mats['t'+c] || (mats['t'+c] = new T.MeshToonMaterial({color:c, gradientMap:toonGrad}));
+// contorno escuro (casca invertida) nas formas principais
+const OUTLINE = new T.MeshBasicMaterial({color:'#2a2140', side:T.BackSide});
+function outline(m, k=1.09){ const o = new T.Mesh(m.geometry, OUTLINE); o.scale.setScalar(k); m.add(o); return m; }
 const lam = c => mats['l'+c] || (mats['l'+c] = new T.MeshLambertMaterial({color:c}));
 function mesh(geo, mat, shadow=true){ const m = new T.Mesh(geo, mat); m.castShadow = shadow; m.receiveShadow = true; return m; }
 const GS = new T.SphereGeometry(1, 16, 12), GC = new T.ConeGeometry(1, 1, 10), GY = new T.CylinderGeometry(1, 1, 1, 10), GB = new T.BoxGeometry(1, 1, 1);
@@ -431,6 +436,14 @@ const POND = {x:-12, z:25, r:4.5};
   while (placed < 55 && tries++ < 2000){ const x = rand(-MAP+3, MAP-3), z = rand(-MAP+3, MAP-3); if (!blocked(x, z, 0)){ tree(x, z, rand(0.8, 1.3)); placed++; } }
   placed = 0; tries = 0;
   while (placed < 18 && tries++ < 2000){ const x = rand(-MAP+3, MAP-3), z = rand(-MAP+3, MAP-3); if (!blocked(x, z, 0)){ rock(x, z, rand(0.4, 0.9)); placed++; } }
+  // manchas no gramado para não ficar tudo liso
+  const blotG = new T.CircleGeometry(1, 16);
+  for (let i = 0; i < 90; i++){
+    const x = rand(-MAP, MAP), z = rand(-MAP, MAP);
+    if (blocked(x, z, -2.5)) continue;
+    const b = mesh(blotG, lam(pick(['#7cc762', '#92d877', '#80cb67'])), false);
+    b.rotation.x = -Math.PI/2; b.position.set(x, 0.008, z); b.scale.set(rand(0.8, 2.6), rand(0.6, 1.8), 1); b.rotation.z = rand(0, TAU); scene.add(b);
+  }
   const flowerG = new T.SphereGeometry(0.09, 6, 4);
   for (let i = 0; i < 160; i++){ const x = rand(-MAP, MAP), z = rand(-MAP, MAP); if (blocked(x, z, -1)) continue; const f = mesh(flowerG, toon(pick(['#fff','#ffd23f','#ff8fb1','#b48cff'])), false); f.position.set(x, 0.08, z); scene.add(f); }
 })();
@@ -443,13 +456,18 @@ function makeTrainerModel(jacket){
   const g = new T.Group();
   const skin = toon('#f2c49b'), red = toon(jacket), blue = toon('#2f4f9e'), dark = toon('#2a2140');
   const legs = [-1, 1].map(s => { const l = mesh(trLegG, blue); l.position.set(s*0.14, 0.62, 0); g.add(l); return l; });
-  const body = mesh(new T.CylinderGeometry(0.26, 0.3, 0.7, 10), red); body.position.y = 0.95; g.add(body);
-  const pack = mesh(new T.BoxGeometry(0.38, 0.45, 0.2), toon('#f2b632')); pack.position.set(0, 1.0, -0.27); g.add(pack);
+  const body = outline(mesh(new T.CylinderGeometry(0.26, 0.3, 0.7, 10), red), 1.07); body.position.y = 0.95; g.add(body);
+  const pack = outline(mesh(new T.BoxGeometry(0.38, 0.45, 0.2), toon('#f2b632')), 1.08); pack.position.set(0, 1.0, -0.27); g.add(pack);
   const arms = [-1, 1].map(s => { const a = mesh(trArmG, red); a.position.set(s*0.34, 1.25, 0); g.add(a); return a; });
-  const head = mesh(new T.SphereGeometry(0.3, 16, 12), skin); head.position.y = 1.55; g.add(head);
-  const cap = mesh(new T.SphereGeometry(0.31, 16, 8, 0, TAU, 0, Math.PI/2), red); cap.position.y = 1.58; g.add(cap);
-  const brim = mesh(new T.BoxGeometry(0.42, 0.04, 0.3), red); brim.position.set(0, 1.6, 0.27); g.add(brim);
-  for (const s of [-1, 1]){ const e = mesh(new T.SphereGeometry(0.045, 8, 6), dark, false); e.position.set(s*0.1, 1.53, 0.27); g.add(e); }
+  const head = outline(mesh(new T.SphereGeometry(0.33, 16, 12), skin), 1.07); head.position.y = 1.58; g.add(head);
+  const cap = mesh(new T.SphereGeometry(0.34, 16, 8, 0, TAU, 0, Math.PI/2), red); cap.position.y = 1.62; g.add(cap);
+  const brim = outline(mesh(new T.BoxGeometry(0.46, 0.04, 0.34), red), 1.1); brim.position.set(0.05, 1.64, 0.3); brim.rotation.y = 0.25; g.add(brim);
+  const nose = mesh(new T.SphereGeometry(0.07, 8, 6), toon('#f0a77f'), false); nose.position.set(0, 1.52, 0.33); g.add(nose);
+  for (const s of [-1, 1]){
+    const e = outline(mesh(new T.SphereGeometry(0.1, 12, 8), toon('#ffffff'), false), 1.12); e.position.set(s*0.12, 1.62, 0.25); e.scale.z = 0.8; g.add(e);
+    const p = mesh(new T.SphereGeometry(s < 0 ? 0.05 : 0.04, 8, 6), dark, false); p.position.set(s*0.12 + s*0.02, 1.6 - (s < 0 ? 0.02 : 0), 0.33); g.add(p);
+  }
+  const grin = mesh(new T.SphereGeometry(0.09, 10, 6), toon('#5a1a24'), false); grin.position.set(0.03, 1.43, 0.29); grin.scale.set(1, 0.35, 0.4); grin.rotation.z = 0.15; g.add(grin);
   scene.add(g);
   return {g, legs, arms};
 }
@@ -478,23 +496,51 @@ function add(parent, geo, mat, p, s, r, shadow=false){
   const m = mesh(geo, mat, shadow);
   m.position.set(p[0], p[1], p[2]); m.scale.set(s[0], s[1], s[2]);
   if (r) m.rotation.set(r[0], r[1], r[2]);
+  if (shadow) outline(m);
   parent.add(m); return m;
 }
+// Olhos esbugalhados: brancos grandes com pupilas soltas que balançam com o movimento (ver updatePupils)
+const GTOR = new T.TorusGeometry(1, 0.13, 6, 20);
 function makeEyes(head, r, x, y, z, size, iris){
-  const eyes = new T.Group(), xs = new T.Group();
-  const ink = toon('#16131c');
+  const pupilsG = new T.Group(), ko = new T.Group();
+  const ink = toon('#16131c'), white = toon('#ffffff');
+  const pupils = [];
+  const R = Math.min(0.36, Math.max(0.25, size*2.1))*r;
   for (const sx of [-1, 1]){
-    if (iris){
-      add(eyes, GS, toon(iris), [sx*x*r, y*r, z*r], [size*r, size*r, size*r*0.5]);
-      add(eyes, GS, ink, [sx*x*r, y*r, (z + size*0.45)*r], [size*0.55*r, size*0.55*r, size*0.3*r]);
-    } else {
-      add(eyes, GS, ink, [sx*x*r, y*r, z*r], [size*r, size*r, size*r*0.7]);
-    }
-    add(eyes, GS, toon('#ffffff'), [sx*x*r + size*0.3*r, (y + size*0.35)*r, (z + size*0.6)*r], [size*0.3*r, size*0.3*r, size*0.2*r]);
-    for (const rr of [0.8, -0.8]) add(xs, GB, ink, [sx*x*r, y*r, (z + 0.05)*r], [size*2.4*r, size*0.5*r, size*0.5*r], [0, 0, rr]);
+    const cx = sx*Math.max(x, 0.24)*r, cy = y*r + R*0.3, cz = z*r;
+    outline(add(head, GS, white, [cx, cy, cz], [R, R, R*0.8]), 1.13);
+    const pr = R*rand(0.42, 0.58);
+    const pm = add(pupilsG, GS, iris ? toon(iris) : ink, [cx, cy, cz + R*0.8], [pr, pr, pr*0.45]);
+    if (iris) add(pm, GS, ink, [0, 0, 0.55], [0.55, 0.55, 0.6]);
+    add(pm, GS, white, [0.35, 0.35, 0.8], [0.28, 0.28, 0.3]);
+    pupils.push({m:pm, cx, cy, cz, Rx:R, Rz:R*0.8, lim:R - pr*0.85, ux:0, uy:0, vx:0, vy:0, k:rand(24, 50), dmp:rand(2.5, 5), gk:rand(10, 16)});
+    const s1 = add(ko, GTOR, ink, [cx, cy, cz + R*0.78], [R*0.6, R*0.6, R*0.6]);
+    add(s1, GTOR, ink, [0, 0, 0], [0.45, 0.45, 0.45]);
   }
-  xs.visible = false; head.add(eyes, xs);
-  return {eyes, xs};
+  ko.visible = false; head.add(pupilsG, ko);
+  return {eyes:pupilsG, xs:ko, pupils};
+}
+const _tv1 = new T.Vector3(), _tv2 = new T.Vector3(), _tv3 = new T.Vector3(), _tq = new T.Quaternion();
+function updatePupils(c, head){
+  const dt = 1/60, p = head.position;
+  if (!c._hp){ c._hp = p.clone(); c._hv = new T.Vector3(); }
+  const v = _tv1.copy(p).sub(c._hp).divideScalar(dt);
+  const a = _tv2.copy(v).sub(c._hv).divideScalar(dt);
+  if (a.lengthSq() > 4e4) a.setLength(200);
+  c._hp.copy(p); c._hv.copy(v);
+  _tq.copy(head.quaternion).invert();
+  const g = _tv3.set(0, -1, 0).applyQuaternion(_tq);
+  a.applyQuaternion(_tq);
+  for (const e of c.pupils){
+    e.vx += (g.x*e.gk - a.x*0.9 - e.ux*e.k - e.vx*e.dmp)*dt;
+    e.vy += (g.y*e.gk - a.y*0.9 - e.uy*e.k - e.vy*e.dmp)*dt;
+    e.ux += e.vx*dt; e.uy += e.vy*dt;
+    const l = Math.hypot(e.ux, e.uy);
+    if (l > 1){ e.ux /= l; e.uy /= l; const dot = e.vx*e.ux + e.vy*e.uy; if (dot > 0){ e.vx -= dot*e.ux*1.4; e.vy -= dot*e.uy*1.4; } }
+    const ox = e.ux*e.lim, oy = e.uy*e.lim;
+    const k = Math.max(0, 1 - (ox*ox + oy*oy)/(e.Rx*e.Rx));
+    e.m.position.set(e.cx + ox, e.cy + oy, e.cz + e.Rz*Math.sqrt(k)*0.98);
+  }
 }
 function makeCreatureMeshes(c){
   const sp = c.sp, d = c.d, s = c.s;
@@ -609,6 +655,17 @@ function makeCreatureMeshes(c){
       break;
   }
   const ey = makeEyes(head, r, eyeCfg[0], eyeCfg[1], eyeCfg[2], eyeCfg[3], eyeCfg[4]);
+  // boca boba: sorriso torto, língua que escapa e dentes de coelho
+  let mouth = null, tongue = null;
+  if (sp.feat !== 'owl'){
+    const MZ = {bear:1.12, gorilla:1.02, kangaroo:1.22, monkey:1.02, rhino:1.5, boar:1.32, wolf:1.5, cheetah:1.0, fox:1.38};
+    const mz = (MZ[sp.feat] || 1.0)*r*0.9, my = sp.plan === 'quad' ? -0.36*r : -0.42*r;
+    mouth = add(head, GS, toon('#5a1a24'), [0.03*r, my, mz], [0.2*r, 0.07*r, 0.07*r], [0, 0, 0.12]);
+    tongue = add(head, GS, toon('#ff7b93'), [0.07*r, my - 0.13*r, mz + 0.02*r], [0.1*r, 0.17*r, 0.05*r], null, true);
+    tongue.visible = false;
+    if (['bear','monkey','kangaroo','cheetah','gorilla','wolf','fox'].includes(sp.feat))
+      for (const sx of [-1, 1]) add(head, GB, toon('#ffffff'), [sx*0.05*r + 0.02*r, my - 0.07*r, mz + 0.01*r], [0.08*r, 0.11*r, 0.03*r]);
+  }
   const limb = (rad, half, tip, mat) => {
     const g = new T.Group();
     add(g, GY, mat, [0,0,0], [rad, half*2, rad], null, true);
@@ -635,7 +692,7 @@ function makeCreatureMeshes(c){
     list = [...legs, torso, head];
   }
   list.forEach(m => scene.add(m));
-  c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.tail = tail;
+  c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.pupils = ey.pupils; c.tail = tail; c.mouth = mouth; c.tongue = tongue; c.blepT = 0;
 }
 
 /* ================= Animais (ragdoll ativo) ================= */
@@ -734,11 +791,25 @@ function syncCreature(c){
   if (c.role !== 'puppet') c.parts.forEach((p, i) => { const m = c.meshes[i]; m.position.copy(p.position); m.quaternion.copy(p.quaternion); });
   const ko = c.ko > 0 || c.fainted;
   c.eyes.visible = !ko; c.xeyes.visible = ko;
-  if (c.tail){
-    const hs = Math.hypot(c.torso.velocity.x, c.torso.velocity.z);
-    c.tail.rotation.y = Math.sin(clock*(hs > 0.5 ? 14 : 5) + c.slot)*(ko ? 0 : hs > 0.5 ? 0.5 : 0.25);
+  if (ko) c.xeyes.children.forEach((s, i) => { s.rotation.z = clock*(i ? -9 : 9); });
+  const head = c.meshes[c.meshes.length - 1];
+  if (!c.removed || c.role === 'puppet') updatePupils(c, head);
+  const hs = c.role === 'puppet' && c._hv ? Math.hypot(c._hv.x, c._hv.z) : Math.hypot(c.torso.velocity.x, c.torso.velocity.z);
+  if (c.tail) c.tail.rotation.y = Math.sin(clock*(hs > 0.5 ? 14 : 5) + c.slot)*(ko ? 0 : hs > 0.5 ? 0.5 : 0.25);
+  if (c.tongue){
+    c.blepT -= 1/60;
+    if (c.blepT < -4 && Math.random() < 0.004) c.blepT = rand(0.8, 1.6);
+    c.tongue.visible = ko || hs > 2.6 || c.blepT > 0 || c.biteT > 0;
+    c.tongue.rotation.z = Math.sin(clock*(hs > 2.6 ? 22 : 6))*0.35;
+    const open = c.attackT > 0 || c.specialT > 0 || c.grabs.length || ko;
+    c.mouth.scale.y = c.d.hr*(open ? 0.17 : 0.07);
   }
   if (c.fade < 1) c.meshes.forEach(m => m.scale.setScalar(Math.max(0.01, c.fade)));
+  else {
+    const torsoMesh = c.meshes[c.parts.indexOf(c.torso)];
+    const b = ko ? 0 : Math.sin(clock*3.2 + c.slot*1.7)*0.035;
+    torsoMesh.scale.set(1 + b, 1 - b*0.7, 1 + b);
+  }
 }
 const fwdOf = c => ({x:Math.sin(c.yaw), z:Math.cos(c.yaw)});
 const tipWorld = b => { const out = new C.Vec3(); b.pointToWorldFrame(b.tip, out); return out; };
@@ -752,7 +823,10 @@ function updateCreature(c, dt){
   if (c.removed) return;
   if (c.ko > 0){ c.ko -= dt; if (c.ko <= 0) toast(`${c.member.nick} se levantou!`); }
   const t = c.torso, inp = c.input || {};
+  const wasGrounded = c.grounded;
   c.grounded = t.position.y < c.H + 0.3*c.s;
+  if (c.grounded && !wasGrounded && c.lastVy < -5) puff(t.position.x, t.position.z, 0.5*c.s, 7);
+  c.lastVy = t.velocity.y;
   if (c.ko > 0 || c.fainted){ if (c.grabs.length) releaseGrabs(c, false); c.grabHeld = false; return; }
 
   let bal = c.wobble > 0 ? 0.3 : 1;
@@ -781,7 +855,11 @@ function updateCreature(c, dt){
 
   const hs = Math.hypot(t.velocity.x, t.velocity.z);
   const stepping = c.grounded && hs > 0.5;
-  if (stepping) c.walk += hs*dt*(c.plan === 'quad' ? 4.2 : 3.4)/c.s;
+  if (stepping){
+    const before = Math.floor(c.walk/Math.PI);
+    c.walk += hs*dt*(c.plan === 'quad' ? 4.2 : 3.4)/c.s;
+    if (Math.floor(c.walk/Math.PI) !== before && hs > 1.8){ const L = c.legs[Math.floor(c.walk/Math.PI) % c.legs.length]; puff(L.position.x, L.position.z, 0.28*c.s, 2); }
+  }
   const sw = stepping ? Math.sin(c.walk)*Math.min(0.75, hs*0.17) : 0;
   const kicking = c.special === 'kick' && c.specialT > 0;
   if (c.plan === 'quad'){
@@ -1071,6 +1149,28 @@ function burst(pos, n, colors, spd){
     particles.push({m, vx:rand(-1,1)*spd, vy:rand(0.5,1.5)*spd, vz:rand(-1,1)*spd, life:rand(0.3, 0.7)});
   }
 }
+// nuvenzinhas de poeira (passos e aterrissagens)
+const puffs = [];
+const puffMat = new T.MeshLambertMaterial({color:'#fffaf0', transparent:true, opacity:0.85});
+function puff(x, z, size, n){
+  for (let i = 0; i < n && puffs.length < 70; i++){
+    const m = new T.Mesh(GS, puffMat.clone());
+    const a = rand(0, TAU), d = rand(0, size*0.6);
+    m.position.set(x + Math.cos(a)*d, size*0.3, z + Math.sin(a)*d);
+    m.scale.setScalar(size*rand(0.25, 0.45));
+    scene.add(m);
+    puffs.push({m, vx:Math.cos(a)*size*1.2, vz:Math.sin(a)*size*1.2, life:0, max:rand(0.35, 0.6), s0:m.scale.x});
+  }
+}
+function updatePuffs(dt){
+  for (let i = puffs.length - 1; i >= 0; i--){
+    const p = puffs[i]; p.life += dt;
+    const k = p.life/p.max;
+    p.m.position.x += p.vx*dt; p.m.position.z += p.vz*dt; p.m.position.y += dt*0.4;
+    p.m.scale.setScalar(p.s0*(1 + k*1.2)); p.m.material.opacity = 0.85*(1 - k);
+    if (k >= 1){ scene.remove(p.m); p.m.material.dispose(); puffs.splice(i, 1); }
+  }
+}
 const rings = [];
 function shockwave(x, z, color, max=3){
   const m = new T.Mesh(new T.RingGeometry(0.8, 1, 40), new T.MeshBasicMaterial({color, transparent:true, side:T.DoubleSide}));
@@ -1102,9 +1202,9 @@ function portrait(species){
   const c = makeCreature(newMember(species, 5), 1000, 1000, 'preview');
   syncCreature(c);
   const sz = c.plan === 'quad' ? Math.max(c.H + c.d.hr*2, c.d.tl*2.6) : c.H + c.d.th + c.d.hr*2.2;
-  const cx = 1000, cy = c.plan === 'quad' ? c.H*0.8 : sz*0.48, cz = c.plan === 'quad' ? 1000 + c.d.tl*0.3 : 1000;
+  const cx = 1000, cy = c.plan === 'quad' ? c.H*0.8 : sz*0.48, cz = c.plan === 'quad' ? 1000 + c.d.tl*0.45 : 1000;
   const dist = sz*2.1 + 0.45;
-  prCam.position.set(cx + dist*0.62, cy + dist*0.28, cz + dist*0.75); prCam.lookAt(cx, cy, cz);
+  prCam.position.set(cx + dist*0.45, cy + dist*0.3, cz + dist*0.85); prCam.lookAt(cx, cy, cz);
   scene.background = null; renderer.setClearColor(0x000000, 0);
   renderer.setRenderTarget(prt); renderer.clear(); renderer.render(scene, prCam); renderer.setRenderTarget(null);
   scene.background = SKY;
@@ -1908,6 +2008,7 @@ function step(dt){
     if (p.m.position.y < 0.05){ p.m.position.y = 0.05; p.vy *= -0.3; p.vx *= 0.7; p.vz *= 0.7; }
     if (p.life <= 0){ scene.remove(p.m); particles.splice(i, 1); }
   }
+  updatePuffs(dt);
   for (let i = rings.length - 1; i >= 0; i--){
     const r = rings[i]; r.t += dt; const k = r.t/0.5;
     r.m.scale.setScalar(1 + k*r.max); r.m.material.opacity = 1 - k;
