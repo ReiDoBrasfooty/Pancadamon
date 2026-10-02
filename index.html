@@ -122,14 +122,14 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div id="wild" class="card-ui fcard" hidden></div>
 <div id="me" class="card-ui fcard" hidden></div>
 <div id="big" hidden></div>
-<div id="pills" hidden><span class="pill card-ui" id="online" hidden>1 jogador online</span><span class="pill card-ui" id="money">0 moedas</span><span class="pill card-ui" id="capSel">Bolota ×0</span><span class="pill card-ui" id="spec" hidden>Especial pronto</span><button class="pill" id="bagBtn">Mochila (I)</button><button class="pill" id="teamBtn">Time (Tab)</button></div>
+<div id="pills" hidden><span class="pill card-ui" id="online" hidden>1 jogador online</span><span class="pill card-ui" id="money">0 moedas</span><span class="pill card-ui" id="capSel">Bolota ×0</span><span class="pill card-ui" id="spec" hidden>Especial pronto</span><button class="pill" id="bagBtn">Mochila (Z)</button><button class="pill" id="teamBtn">Time (Tab)</button></div>
 <div id="prompt" class="card-ui" hidden></div>
 <div id="toasts"></div>
 <div id="help" hidden></div>
 <div id="fade"></div>
 <div id="touch">
   <div class="pad"><span></span><button data-k="KeyW">▲</button><span></span><button data-k="KeyA">◀</button><button data-k="KeyE">E</button><button data-k="KeyD">▶</button><span></span><button data-k="KeyS">▼</button><span></span></div>
-  <div class="acts"><button data-k="KeyJ">Ataque</button><button data-k="KeyK">Agarra</button><button data-k="KeyL">Esp.</button><button data-k="Space">Pulo</button><button data-k="KeyT">Captura</button><button data-k="KeyR">Fugir</button><button data-k="KeyC">Troca</button><button data-k="KeyI">Mochila</button></div>
+  <div class="acts"><button data-k="KeyQ">Ataque</button><button data-k="KeyE">Agarra</button><button data-k="KeyF">Esp.</button><button data-k="Space">Pulo</button><button data-k="KeyR">Captura</button><button data-k="KeyX">Fugir</button><button data-k="KeyC">Troca</button><button data-k="KeyZ">Mochila</button></div>
 </div>
 <div id="overlay" class="overlay" hidden><div class="card" id="card"></div></div>
 
@@ -1778,13 +1778,13 @@ function netWorldStep(){
   for (const r of net.remotes.values()){
     const ch = r.p.presence.ch;
     if (!ch || ch.to !== me || r.st !== 'w' || ch.code === net.decline) continue;
-    if (pressed.KeyY){
+    if (pressed.KeyE){
       if (!game.team.some(m => m.hp > 0)){ toast('Seu time está desmaiado. Cure no Centro antes.'); return null; }
       net.accept = {from:r.peer, code:String(ch.code).slice(0, 12)}; net.acceptAt = clock; net.pubT = 0;
       startDuel(false, net.accept.code, r.peer); return null;
     }
-    if (pressed.KeyN){ net.decline = ch.code; net.declineAt = clock; net.pubT = 0; return null; }
-    return {text:`${nameOf(r.p)} te desafiou pra um duelo! Y aceitar · N recusar`, key:'KeyY'};
+    if (pressed.KeyX){ net.decline = ch.code; net.declineAt = clock; net.pubT = 0; return null; }
+    return {text:`${nameOf(r.p)} te desafiou pra um duelo! E aceitar · X recusar`, key:'KeyE'};
   }
   let best = null, bd = 3.5;
   for (const r of net.remotes.values()){ if (r.st !== 'w') continue; const d = Math.hypot(r.x - trainer.pos.x, r.z - trainer.pos.z); if (d < bd){ bd = d; best = r; } }
@@ -1833,8 +1833,8 @@ function pvpHostStep(dt){
   const locked = d.t < 3 || battle.over;
   const v = moveInput();
   const dPW = Math.hypot(W.torso.position.x - P.torso.position.x, W.torso.position.z - P.torso.position.z);
-  P.input = locked ? {} : {mx:v.x, mz:v.z, jump:!!pressed.Space && !P.grabs.length, lift:!!keys.Space, punch:!!(pressed.KeyJ || pressed.Mouse0), grab:!!keys.KeyK,
-    special:!!(pressed.KeyL || pressed.KeyE), face: v.lengthSq() < 0.01 || dPW < 2.6 ? W.torso.position : null};
+  P.input = locked ? {} : {mx:v.x, mz:v.z, jump:!!pressed.Space && !P.grabs.length, lift:!!keys.Space, punch:!!(pressed.KeyQ || pressed.Mouse0), grab:!!keys.KeyE,
+    special:!!pressed.KeyF, face: v.lengthSq() < 0.01 || dPW < 2.6 ? W.torso.position : null};
   const gp = d.dr.peers().find(p => p.peer === d.oppPeer);
   const gi = gp && gp.presence && gp.presence.inp;
   d.missing = gp ? 0 : d.missing + dt;
@@ -1848,7 +1848,7 @@ function pvpHostStep(dt){
     let res = null;
     if (W.fainted) res = 'A';
     else if (P.fainted) res = 'B';
-    else if (pressed.KeyR){ res = 'B'; toast('Você desistiu.'); }
+    else if (pressed.KeyX){ res = 'B'; toast('Você desistiu.'); }
     else if (gp && gp.presence.ff){ res = 'A'; toast(`${d.oppName} desistiu.`); }
     else if (d.missing > 5){ res = 'A'; toast(`${d.oppName} saiu do duelo.`); }
     if (res){ d.res = res; battle.over = true; d.endT = 2.5; toast(res === 'A' ? 'Você venceu o duelo!' : 'Você perdeu o duelo.'); }
@@ -1863,11 +1863,11 @@ function pvpGuestStep(dt){
   const v = moveInput();
   if (!battle.over){
     if (pressed.Space) d.ls.jp++;
-    if (pressed.KeyJ || pressed.Mouse0) d.ls.pj++;
-    if (pressed.KeyL || pressed.KeyE) d.ls.sp++;
-    if (pressed.KeyR && !d.ff){ d.ff = true; toast('Você desistiu.'); }
+    if (pressed.KeyQ || pressed.Mouse0) d.ls.pj++;
+    if (pressed.KeyF) d.ls.sp++;
+    if (pressed.KeyX && !d.ff){ d.ff = true; toast('Você desistiu.'); }
   }
-  d.dr.presence({inp:{mx:r2(v.x), mz:r2(v.z), g:keys.KeyK ? 1 : 0, l:keys.Space ? 1 : 0, pj:d.ls.pj, sp:d.ls.sp, jp:d.ls.jp}, ff:d.ff ? 1 : null}).catch(() => {});
+  d.dr.presence({inp:{mx:r2(v.x), mz:r2(v.z), g:keys.KeyE ? 1 : 0, l:keys.Space ? 1 : 0, pj:d.ls.pj, sp:d.ls.sp, jp:d.ls.jp}, ff:d.ff ? 1 : null}).catch(() => {});
   const host = d.dr.peers().find(p => p.peer === d.oppPeer);
   const s = host && host.presence && host.presence.snap;
   if (s && typeof s === 'object' && s.q !== d.lastQ){
@@ -1938,7 +1938,7 @@ function updatePvpHud(){
   if (!d.fightAt && cdLeft <= 0) d.fightAt = clock;
   const txt = battle.over ? (d.res === (battle.host ? 'A' : 'B') ? 'VITÓRIA!' : 'DERROTA') : cdLeft > 0 ? String(Math.ceil(cdLeft)) : clock - d.fightAt < 0.8 ? 'LUTA!' : '';
   big.hidden = !txt; if (big.textContent !== txt) big.textContent = txt;
-  $('spec').textContent = battle.host ? (cd > 0 ? `${battle.mon.sp.specialName} em ${cd.toFixed(1)}s` : `${battle.mon.sp.specialName} pronto (L)`) : (cd > 0 ? `${SPECIES[battle.member.species].specialName} em ${cd.toFixed(1)}s` : `${SPECIES[battle.member.species].specialName} pronto (L)`);
+  $('spec').textContent = battle.host ? (cd > 0 ? `${battle.mon.sp.specialName} em ${cd.toFixed(1)}s` : `${battle.mon.sp.specialName} pronto (F)`) : (cd > 0 ? `${SPECIES[battle.member.species].specialName} em ${cd.toFixed(1)}s` : `${SPECIES[battle.member.species].specialName} pronto (F)`);
 }
 
 /* ================= Entrada ================= */
@@ -1999,7 +1999,7 @@ function step(dt){
     if (np) setPrompt(np.text, np.key); else setPrompt(nearHeal ? 'E: curar seu time' : nearShop ? 'E: entrar na loja' : '', 'KeyE');
     if (nearHeal && pressed.KeyE){ healAll(); toast('Seu time foi curado!'); }
     if (nearShop && pressed.KeyE) showShop();
-    if (pressed.KeyI) showBag();
+    if (pressed.KeyZ) showBag();
     if (pressed.KeyC) cycleCapture();
     for (let i = 1; i <= 6; i++) if (pressed['Digit' + i]) switchTo(i - 1);
     if (pressed.Tab) showTeam();
@@ -2020,7 +2020,7 @@ function step(dt){
       const near = o && Math.hypot(o.torso.position.x - P.torso.position.x, o.torso.position.z - P.torso.position.z) < 2.6;
       P.input = {
         mx:v.x, mz:v.z, jump:!!pressed.Space && !P.grabs.length, lift:!!keys.Space,
-        punch:!!(pressed.KeyJ || pressed.Mouse0), grab:!!keys.KeyK, special:!!(pressed.KeyL || pressed.KeyE),
+        punch:!!(pressed.KeyQ || pressed.Mouse0), grab:!!keys.KeyE, special:!!pressed.KeyF,
         face: o && (v.lengthSq() < 0.01 || near) ? o.torso.position : null
       };
     }
@@ -2029,11 +2029,10 @@ function step(dt){
     const aim = mouse.has ? mouseGround() : null;
     reticle.visible = !!aim && !battle.capture && !battle.over;
     if (aim) reticle.position.set(aim.x, 0.06, aim.z);
-    if (pressed.Mouse2 || pressed.KeyQ){ if (aim) throwBall(aim); else if (!battle.wild.removed) throwBall(battle.wild.torso.position); }
-    if (pressed.KeyT && !battle.wild.removed) throwBall(battle.wild.torso.position);
-    if (pressed.KeyR && !battle.capture) endBattle('flee');
+    if (pressed.Mouse2 || pressed.KeyR){ if (aim) throwBall(aim); else if (!battle.wild.removed) throwBall(battle.wild.torso.position); }
+    if (pressed.KeyX && !battle.capture) endBattle('flee');
     if (pressed.KeyC) cycleCapture();
-    if (pressed.KeyI) showBag();
+    if (pressed.KeyZ) showBag();
     for (let i = 1; i <= 6; i++) if (pressed['Digit' + i]) switchTo(i - 1);
     setPrompt('');
   }
@@ -2149,7 +2148,7 @@ function updateBattleHud(){
   bar.style.width = r*100 + '%'; bar.style.background = hpColor(r);
   $('whp').textContent = `${Math.ceil(m.hp)}/${m.maxHp} PV`;
   const cd = battle.mon.specialCd;
-  $('spec').textContent = cd > 0 ? `${battle.mon.sp.specialName} em ${cd.toFixed(1)}s` : `${battle.mon.sp.specialName} pronto (L)`;
+  $('spec').textContent = cd > 0 ? `${battle.mon.sp.specialName} em ${cd.toFixed(1)}s` : `${battle.mon.sp.specialName} pronto (F)`;
   $('spec').style.opacity = cd > 0 ? 0.6 : 1;
 }
 function setHud(){
@@ -2169,10 +2168,10 @@ function setHud(){
   $('capSel').innerHTML = `<img src="${itemIcon(game.sel)}" alt="">${ITEMS[game.sel].name} ×${count(game.sel)} <span class="small">(C)</span>`;
   $('help').hidden = mode === 'title';
   $('help').innerHTML = pvp
-    ? 'DUELO · <kbd>WASD</kbd> mover · <kbd>J</kbd>/clique ataque · <kbd>K</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>L</kbd> especial · <kbd>R</kbd> desistir'
+    ? 'DUELO · <kbd>WASD</kbd> mover · <kbd>Q</kbd>/clique ataque · <kbd>E</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>F</kbd> especial · <kbd>X</kbd> desistir'
     : inBattle
-    ? '<kbd>WASD</kbd> mover · <kbd>J</kbd>/clique ataque · <kbd>K</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>L</kbd> especial · <kbd>Q</kbd>/botão direito arremessa captura · <kbd>C</kbd> troca captura · <kbd>I</kbd> mochila · <kbd>1</kbd>-<kbd>6</kbd> trocar · <kbd>R</kbd> fugir'
-    : '<kbd>WASD</kbd> andar · chegue perto de um animal no mato alto pra batalhar · <kbd>I</kbd> mochila · <kbd>Tab</kbd> time · <kbd>E</kbd> no tapete do Centro ou da Loja' + (net.room ? ' · <kbd>F</kbd> perto de um amigo: desafiar pra duelo' : '');
+    ? '<kbd>WASD</kbd> mover · <kbd>Q</kbd>/clique ataque · <kbd>E</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>F</kbd> especial · <kbd>R</kbd>/botão direito arremessa captura · <kbd>C</kbd> troca captura · <kbd>Z</kbd> mochila · <kbd>1</kbd>-<kbd>6</kbd> trocar · <kbd>X</kbd> fugir'
+    : '<kbd>WASD</kbd> andar · chegue perto de um animal no mato alto pra batalhar · <kbd>Z</kbd> mochila · <kbd>Tab</kbd> time · <kbd>E</kbd> no tapete do Centro ou da Loja' + (net.room ? ' · <kbd>F</kbd> perto de um amigo: desafiar pra duelo' : '');
   teamKey = ''; wildKey = ''; $('wild').dataset.key = ''; $('me').dataset.key = ''; renderTeam();
 }
 let promptText = null, promptKey = null;
@@ -2206,10 +2205,10 @@ function showTitle(){
     ${triHtml}
     <div class="grid">${STARTERS.map(k => monCard(newMember(k, 5), {starter:true})).join('')}</div>
     <div class="controls">
-      <div><kbd>WASD</kbd> andar / mover o animal</div><div><kbd>J</kbd> ou clique: soco ou mordida</div>
-      <div><kbd>K</kbd> segurar: agarrar ou morder e segurar</div><div><kbd>Espaço</kbd> pular, ou levantar quem você pegou</div>
-      <div><kbd>L</kbd> golpe especial do animal</div><div><kbd>Q</kbd> ou botão direito: arremessar bolota na mira</div>
-      <div><kbd>I</kbd> mochila: usar e ver itens</div><div><kbd>E</kbd> na loja: comprar cura e captura</div>
+      <div><kbd>WASD</kbd> andar / mover o animal</div><div><kbd>Q</kbd> ou clique: soco ou mordida</div>
+      <div><kbd>E</kbd> segurar: agarrar ou morder e segurar</div><div><kbd>Espaço</kbd> pular, ou levantar quem você pegou</div>
+      <div><kbd>F</kbd> golpe especial do animal</div><div><kbd>R</kbd> ou botão direito: arremessar bolota na mira</div>
+      <div><kbd>Z</kbd> mochila · <kbd>C</kbd> troca captura · <kbd>X</kbd> fugir</div><div><kbd>E</kbd> no tapete: loja e Centro de Cura</div>
     </div>`;
   $('card').querySelectorAll('[data-starter]').forEach(b => b.onclick = () => {
     game = {team:[newMember(b.dataset.starter, 5)], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota'};
@@ -2230,7 +2229,7 @@ function closeMenu(){
 }
 addEventListener('keydown', e => {
   if (mode !== 'menu') return;
-  if (e.code === 'Escape' || (e.code === 'Tab' && menuKind === 'team') || (e.code === 'KeyI' && menuKind === 'bag') || (e.code === 'KeyE' && menuKind === 'shop')){
+  if (e.code === 'Escape' || (e.code === 'Tab' && menuKind === 'team') || (e.code === 'KeyZ' && menuKind === 'bag') || (e.code === 'KeyE' && menuKind === 'shop')){
     closeMenu(); delete pressed[e.code];
   }
 });
@@ -2294,8 +2293,8 @@ function showBag(){
     ${targets}
     <div class="sect">Captura</div>
     ${cap.length ? `<div class="items">${cap.map(k => itemCard(k, `<span class="qty">×${count(k)}</span><button data-sel="${k}" ${game.sel === k ? 'disabled' : ''}>${game.sel === k ? 'Equipado' : 'Equipar'}</button>`, game.sel === k)).join('')}</div>` : '<p class="hint">Nenhum item de captura. Compre na loja.</p>'}
-    <p class="hint">O item equipado é o que você arremessa com Q ou botão direito.</p>
-    <div class="actions"><button class="primary" id="closeMenu">Fechar (I)</button></div>`;
+    <p class="hint">O item equipado é o que você arremessa com R ou botão direito.</p>
+    <div class="actions"><button class="primary" id="closeMenu">Fechar (Z)</button></div>`;
   openMenu('bag', html);
   $('closeMenu').onclick = () => { bagPick = null; closeMenu(); };
   $('card').querySelectorAll('[data-pick]').forEach(b => b.onclick = () => { bagPick = b.dataset.pick; showBag(); });

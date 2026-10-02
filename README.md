@@ -12,21 +12,23 @@ O progresso fica salvo no navegador (localStorage).
 
 ### Controles
 
+Todos os comandos ficam em volta do WASD, na mão esquerda.
+
 | Tecla | Ação |
 |---|---|
 | `W` `A` `S` `D` | Andar / mover o animal na batalha |
-| `J` ou clique | Soco (animais de duas patas) ou mordida (quatro patas) |
-| `K` (segurar) | Agarrar ou morder e segurar |
-| `Espaço` | Pular; segurando alguém, levanta. Solte `K` para arremessar |
-| `L` | Golpe especial do animal |
-| `Q` ou botão direito | Arremessar o item de captura na mira |
+| `Q` ou clique | Soco (animais de duas patas) ou mordida (quatro patas) |
+| `E` (segurar) | Na batalha: agarrar ou morder e segurar |
+| `Espaço` | Pular; segurando alguém, levanta. Solte `E` para arremessar |
+| `F` | Golpe especial do animal |
+| `R` ou botão direito | Arremessar o item de captura na mira |
 | `C` | Trocar o item de captura |
-| `I` | Mochila |
+| `X` | Fugir da batalha / desistir do duelo |
+| `Z` | Mochila |
 | `Tab` | Ver o time |
 | `1`–`6` | Trocar de animal |
-| `E` | Usar o Centro de Cura ou a Loja (no tapete) |
-| `R` | Fugir da batalha / desistir do duelo |
-| `F` / `Y` / `N` | Desafiar um amigo / aceitar / recusar |
+| `E` (no mapa) | Usar o Centro de Cura ou a Loja (no tapete) |
+| `F` / `E` / `X` (no mapa) | Desafiar um amigo / aceitar / recusar |
 
 No celular aparecem botões na tela.
 
