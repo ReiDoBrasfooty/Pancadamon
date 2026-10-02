@@ -1479,7 +1479,7 @@ function startBattle(w){
   const tx = trainer.pos.x, tz = trainer.pos.z, wp = w.torso.position;
   const dx = wp.x - tx, dz = wp.z - tz, l = Math.hypot(dx, dz) || 1;
   const center = {x:wp.x - dx/l*1.6, z:wp.z - dz/l*1.6};
-  battle = {wild:w, mon:follower, member:follower.member, center, R:6.5, over:false, capture:null, endT:0, result:null, faintT:0, switchCd:0};
+  battle = {wild:w, mon:follower, member:follower.member, center, R:6.5, over:false, capture:null, endT:0, result:null, faintT:0, switchCd:0, fought:new Set([follower.member])};
   follower.role = 'fighter'; w.role = 'enemy'; follower = null;
   trainer.yaw = Math.atan2(dx, dz);
   ringMesh.position.set(center.x, 0.04, center.z); ringMesh.visible = true;
@@ -1507,10 +1507,15 @@ function finishBattle(){
     }
     const xp = Math.round((r === 'capture' ? 10 : 15) + 10*W.member.level);
     trainer.cheerT = Math.max(trainer.cheerT, 1.8);
-    // todos os animais vivos do time ganham XP (o recém-capturado não conta)
+    // todos os animais vivos do time ganham XP: quem lutou ganha cheio, quem ficou na reserva ganha metade
     const alive = game.team.filter(m => m.hp > 0 && m !== W.member);
-    for (const m of alive) m.xp += xp;
-    log.push(alive.length > 1 ? `Seu time ganhou ${xp} XP cada (${alive.length} animais).` : `${(alive[0] || lead).nick} ganhou ${xp} XP.`);
+    const fought = battle.fought || new Set([lead]);
+    const half = Math.round(xp*0.5);
+    const fighters = alive.filter(m => fought.has(m)), bench = alive.filter(m => !fought.has(m));
+    for (const m of fighters) m.xp += xp;
+    for (const m of bench) m.xp += half;
+    if (fighters.length) log.push(`${fighters.map(m => m.nick).join(' e ')} ${fighters.length > 1 ? 'lutaram e ganharam' : 'lutou e ganhou'} ${xp} XP.`);
+    if (bench.length) log.push(`Na reserva: ${bench.map(m => m.nick).join(', ')} ${bench.length > 1 ? 'ganharam' : 'ganhou'} ${half} XP.`);
     for (const m of alive) levelUp(m, log);
     const coins = Math.round((r === 'capture' ? 10 : 25) + (r === 'capture' ? 5 : 10)*W.member.level);
     game.money += coins; log.push(`Você ganhou ${coins} moedas.`);
@@ -1649,6 +1654,7 @@ function switchTo(i){
   const f = trainerFwd();
   battle.mon = makeCreature(m, trainer.pos.x + f.x*1.2, trainer.pos.z + f.z*1.2, 'fighter');
   battle.member = m; battle.switchCd = 1.5; battle.faintT = 0;
+  if (battle.fought) battle.fought.add(m);
   toast(`Volta! Vai, ${m.nick}!`); setHud();
 }
 function battleUpdate(dt){
