@@ -27,7 +27,7 @@ Todos os comandos ficam em volta do WASD, na mão esquerda.
 | `Z` | Mochila |
 | `Tab` | Ver o time |
 | `1`–`5` | Trocar de animal |
-| `E` (no mapa) | Usar o Centro de Cura, a Caixa de Animais ou a Loja (no tapete) |
+| `E` (no mapa) | Usar o Centro de Cura, a Caixa de Animais, a Loja ou um portal (no tapete) |
 | `F` / `E` / `X` (no mapa) | Desafiar um amigo / aceitar / recusar |
 
 No celular aparecem botões na tela.
@@ -54,7 +54,17 @@ No celular aparecem botões na tela.
 - **Captura com frutos e sementes:** Bolota, Pinha (1,5x), Coco (2,2x) e Semente Dourada (garantida).
 - **Loja do Mato e mochila:** itens de cura (Fruta Silvestre, Pote de Mel, Cesta de Frutas, Erva Reanimadora) e de captura, comprados com moedas ganhas nas batalhas.
 - **Time de até 5 animais e Caixa de Animais:** capturas com o time cheio vão pra caixa, um terminal ao lado do Centro de Cura onde você guarda e pega animais. Quem é guardado descansa e volta curado.
-- **Mapa:** áreas de mato alto com níveis diferentes. Cada área mantém 2 animais e repõe quem foi capturado ou derrotado.
+- **5 mapas ligados por portais:** os Campos Pancada são o centro, com um portal em cada ponta da estrada. Cada mapa tem cidade própria (Centro de Cura, Loja e Caixa), clima, cenário e animais mais fortes:
+
+  | Mapa | Níveis | Destaques |
+  |---|---|---|
+  | Campos Pancada | 2–10 | Vila Pancada, fazenda, lago, Bosque Sombrio, Arena PvP |
+  | Sertão Rachado | 8–14 | cactos, Oásis Escondido, Paredões Vermelhos, Cemitério de Ossos |
+  | Pico Congelado | 13–19 | neve caindo, Lago Congelado, Vila dos Iglus, Cume Gelado |
+  | Brejo Lamacento | 17–23 | lagoas de lama, vaga-lumes, Árvore Anciã |
+  | Cratera Brava | 22–28 | poças de lava, Vulcão Pancadão, Campo de Obsidiana |
+
+- **Matos:** cada mapa tem 4 a 7 áreas de mato alto com níveis diferentes. Cada área mantém 2 animais e repõe quem foi capturado ou derrotado. O jogo lembra em qual mapa você parou.
 
 ## Multiplayer
 

@@ -47,16 +47,16 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
 
 **Data:**
 - `ATTR` and `BEATS` define the class triangle: Força > Agilidade > Inteligência > Força, applied via `adv()` (×1.3 / ×0.8).
-- `SPECIES` has 10 animals. Each has `plan` (`biped` | `quad`), `feat` (the visual builder key), `base`/`grow` for [FOR, AGI, INT], and `special`.
+- `SPECIES` has 10 animals; the new maps reuse them at higher levels. Each has `plan` (`biped` | `quad`), `feat` (the visual builder key), `base`/`grow` for [FOR, AGI, INT], and `special`.
 - `stats(member)` derives every combat number (HP, power, speed, dodge, special cooldown, etc.) from level. Members only store `{species, level, xp, hp, maxHp, nick}`.
 - The team holds at most `TEAM_MAX` (5) members; the rest live in `game.box`, managed by `showBox()` at the terminal next to the Centro (`BOX_SPOT`).
 - `ITEMS` holds cure and capture items. Capture items are a nut or seed (Bolota/Pinha/Coco/Semente), each with a `mult`.
 - The save lives in `localStorage` under `pancadamon3d_v2`. `load()` migrates older shapes, so keep it backward compatible.
 
 **Physics:**
-- Every creature gets its own collision bit `16 << slot` from `slotFree` (25 slots). This keeps its parts from colliding with each other.
-- `ALL = 0x3FFFFFFF`. Fixed groups are `G_GROUND`, `G_STATIC`, `G_BALL` and `G_TRAINER`.
-- Anything that creates creatures must respect the slot pool; `spawnWild` checks `slotFree.length`.
+- All creature parts share the group `G_CREATURE`. A broadphase override (`world.broadphase.needBroadphaseCollision`) skips pairs with the same `owner`, so a creature's parts never collide with each other; a projectile skips its `body.ignore` creature (capture item → your fighter, rock → its thrower).
+- `ALL = 0x3FFFFFFF`. Fixed groups are `G_GROUND`, `G_STATIC`, `G_BALL`, `G_TRAINER` and `G_CREATURE`.
+- There is no hard creature limit. `MAX_CREATURES` (60) is a soft cap for physics cost; `spawnWild` and remote pets check `creatures.length` against it.
 
 **Active ragdoll:**
 - `makeCreature` builds cannon bodies and `PointToPointConstraint` joints. Its meshes are separate scene objects in the **same order as `parts`**, with the head always last.
@@ -85,9 +85,16 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
 - Each entry of `PATCHES` keeps `PER_PATCH` wild animals; `updateSpawns` refills them.
 
 **Map:**
+- There are 5 maps (`REGIONS`), laid side by side along x every `MAP_GAP` (150) units. Each is a square of half-size `MAP` centered at `(r.cx, 0)`. Map 0 (Campos Pancada) is the hub; `PORTALS` connects it to the others.
+  - Each map's meshes live under `r.root` and its static bodies in `r.bodies`. Map 0 is captured between `regionMark()` and `regionClaim()`; the others are built by `buildRegion(r, fn)` (`buildSertao`, `buildPico`, `buildBrejo`, `buildCratera`). Anything a builder adds to `scene`/`world` is claimed automatically.
+  - `applyRegion` shows only the current map, removes the other maps' bodies from the world, swaps sky/light/weather (`ambFx`) and despawns other maps' wilds. `step()` calls it whenever `regionAt(trainer.pos.x)` changes, so every teleport (portal, blackout, duel) just works.
+  - Every `PATCHES` entry has `region`; `updateSpawns` only fills the current map. `game.map` saves which map the player was in.
+  - Tall landmarks go in the corners away from the camera side (`-x/-z`, `+x/-z`, `-x/+z`), never in `+x/+z`, or they hide the player.
 - The trainer and NPCs collide using `colliders` (circles) and `rects` (AABBs) through `resolveCollision`. Creatures use static cannon bodies instead, so solid scenery needs both (`solidRect` / `solidCircle` do this).
 - Repeated small scenery (grass tufts, flowers, pebbles) goes through `instanced()` to keep draw calls low. `paths` records every `pathStrip` so decoration can avoid them.
 - `ZONES` drive the area-name banner and keep random decoration out of named places. `buildPlaces` must run before `buildNature`, because `blocked()` reads `ZONES`, `rects` and `colliders`.
+- Towns are data in `TOWNS`: buildings (`center` | `shop` | `box` | `house`, each `{x, z, ry}` with `ry` a multiple of 90°), plaza, well, lamps and NPCs. `buildTown` runs inside `buildPlaces`; town NPCs are created next to the other `makeNpc` calls. Every town also becomes a `ZONES` entry.
+- Interactive mats live in `SPOTS` (`{kind, x, z, r, b, lz}`); `step()` picks the one under the trainer and `SPOT_TEXT` gives its prompt. `blackout()` sends the trainer to the nearest `heal` spot. Use `rotPt`, `solidLocal` and `colliderLocal` for anything placed relative to a rotated building.
 
 **Multiplayer (`net`):**
 - It uses only `room` presence, never `emit`, because viewers without edit rights cannot emit on topics.

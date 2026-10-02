@@ -250,7 +250,8 @@ const FWD = new T.Vector3(-1,0,-1).normalize(), RIGHT = new T.Vector3(1,0,-1).no
 function resize(){ renderer.setSize(innerWidth, innerHeight); }
 addEventListener('resize', resize);
 
-scene.add(new T.HemisphereLight('#ffffff', '#5d8a4e', 0.5));
+const hemi = new T.HemisphereLight('#ffffff', '#5d8a4e', 0.5);
+scene.add(hemi);
 const sun = new T.DirectionalLight('#fff3dc', 0.7);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
 Object.assign(sun.shadow.camera, {left:-22, right:22, top:22, bottom:-22, near:1, far:80});
@@ -308,8 +309,17 @@ world.broadphase = new C.SAPBroadphase(world);
 world.solver.iterations = 12;
 world.allowSleep = false;
 const GRAV = 20;
-const G_GROUND = 1, G_STATIC = 2, G_BALL = 4, G_TRAINER = 8, ALL = 0x3FFFFFFF;
-let slotFree = Array.from({length:25}, (_, i) => i);
+const G_GROUND = 1, G_STATIC = 2, G_BALL = 4, G_TRAINER = 8, G_CREATURE = 16, ALL = 0x3FFFFFFF;
+// Partes do mesmo animal não colidem entre si, e a bolota/pedra não acerta quem a jogou (body.ignore).
+// O filtro é por dono, então não há limite de animais; MAX_CREATURES só segura o custo da física.
+const MAX_CREATURES = 60;
+let creatureSeq = 0;
+const baseNeedCollision = world.broadphase.needBroadphaseCollision;
+world.broadphase.needBroadphaseCollision = function(a, b){
+  if (a.owner && (a.owner === b.owner || a.owner === b.ignore)) return false;
+  if (b.owner && b.owner === a.ignore) return false;
+  return baseNeedCollision.call(this, a, b);
+};
 const groundMat = new C.Material('ground'), bodyMat = new C.Material('body');
 world.addContactMaterial(new C.ContactMaterial(groundMat, bodyMat, {friction:0.5, restitution:0}));
 world.addContactMaterial(new C.ContactMaterial(bodyMat, bodyMat, {friction:0.3, restitution:0.1}));
@@ -318,12 +328,34 @@ const groundBody = new C.Body({mass:0, shape:new C.Plane(), material:groundMat, 
 groundBody.quaternion.setFromAxisAngle(AX, -Math.PI/2);
 groundBody.isGround = true;
 world.addBody(groundBody);
-const MAP = 40;
-for (const [nx, nz] of [[1,0],[-1,0],[0,1],[0,-1]]){
-  const w = new C.Body({mass:0, shape:new C.Plane(), material:groundMat, collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
-  w.position.set(-nx*MAP, 0, -nz*MAP);
-  const q = new C.Quaternion(); q.setFromVectors(new C.Vec3(0,0,1), new C.Vec3(nx,0,nz)); w.quaternion.copy(q);
-  w.isStatic = true; world.addBody(w);
+/* ---------- Mapas ----------
+   São 5 mapas lado a lado no eixo x, cada um um quadrado de lado 2*MAP com centro em (cx, 0).
+   Só o mapa onde o treinador está fica visível e com física (applyRegion); portais levam de um pro outro. */
+const MAP = 40, MAP_GAP = 150;
+const REGIONS = [
+  {name:'Campos Pancada', lv:'nível 2–10', col:'#8fd27a', sky:'#9fd4f2', hemi:['#ffffff', '#5d8a4e'], ground:'#86cf6c', fx:null},
+  {name:'Sertão Rachado', lv:'nível 8–14', col:'#f2a03a', sky:'#f6dca8', hemi:['#fff4dc', '#b08a4e'], ground:'#e6c98a', fx:'dust'},
+  {name:'Pico Congelado', lv:'nível 13–19', col:'#7cc7ff', sky:'#cfe6f5', hemi:['#ffffff', '#8fb3c9'], ground:'#eef4f8', fx:'snow'},
+  {name:'Brejo Lamacento', lv:'nível 17–23', col:'#5fbf6a', sky:'#a7bf9c', hemi:['#e8ffe0', '#3f5a34'], ground:'#6f8f4a', fx:'fireflies'},
+  {name:'Cratera Brava', lv:'nível 22–28', col:'#ff5a36', sky:'#d99a7c', hemi:['#ffd9c0', '#5a2a20'], ground:'#5d504c', fx:'embers'}
+];
+REGIONS.forEach((r, i) => { r.id = i; r.cx = i*MAP_GAP; r.cz = 0; r.root = new T.Group(); r.bodies = []; r.active = true; scene.add(r.root); });
+const regionAt = x => REGIONS[clamp(Math.round(x/MAP_GAP), 0, REGIONS.length - 1)];
+const inRegion = (x, z, r, m=0) => Math.abs(x - r.cx) < MAP - m && Math.abs(z - r.cz) < MAP - m;
+// tudo que um construtor põe na cena e no mundo da física passa a ser daquele mapa
+const regionMark = () => ({objs:new Set(scene.children), nb:world.bodies.length});
+function regionClaim(r, mk){
+  for (const o of scene.children.slice()) if (!mk.objs.has(o) && !REGIONS.some(g => g.root === o)) r.root.add(o);
+  r.bodies.push(...world.bodies.slice(mk.nb));
+}
+function buildRegion(r, fn){ const mk = regionMark(); fn(r); regionClaim(r, mk); }
+for (const r of REGIONS){
+  // paredes invisíveis na borda do mapa
+  buildRegion(r, () => {
+    for (const [sx, sz] of [[1,0],[-1,0],[0,1],[0,-1]]) staticBox(r.cx + sx*(MAP + 0.5), 10, r.cz + sz*(MAP + 0.5), sx ? 0.5 : MAP + 1, 10, sz ? 0.5 : MAP + 1);
+    const g = mesh(new T.PlaneGeometry(MAP*2 + 40, MAP*2 + 40), lam(r.ground), false);
+    g.rotation.x = -Math.PI/2; g.position.set(r.cx, 0, r.cz); scene.add(g);
+  });
 }
 
 const _qc = new C.Quaternion(), _qe = new C.Quaternion(), _qa = new C.Quaternion(), _qb = new C.Quaternion(), _qt = new C.Quaternion();
@@ -347,100 +379,154 @@ function yawLocal2(yaw, ax1, a1, ax2, a2, out){
 
 /* ================= Mapa ================= */
 const colliders = [];
-const ground = mesh(new T.PlaneGeometry(MAP*2+40, MAP*2+40), lam('#86cf6c'), false);
-ground.rotation.x = -Math.PI/2; scene.add(ground);
+// daqui até o fim de buildNature tudo é do mapa 0 (Campos Pancada)
+const mark0 = regionMark();
 const paths = [];
-function pathStrip(x1, z1, x2, z2, w){
+function pathStrip(x1, z1, x2, z2, w, col='#e3cf98'){
   paths.push({x1, z1, x2, z2, w});
   const len = Math.hypot(x2-x1, z2-z1);
-  const p = mesh(new T.PlaneGeometry(w, len), lam('#e3cf98'), false);
+  const p = mesh(new T.PlaneGeometry(w, len), lam(col), false);
   p.rotation.x = -Math.PI/2; p.rotation.z = -Math.atan2(x2-x1, z2-z1) + Math.PI;
   p.position.set((x1+x2)/2, 0.01, (z1+z2)/2); scene.add(p);
 }
-pathStrip(0, -10, 0, 30, 3); pathStrip(-30, 0, 30, 0, 3); pathStrip(0, -10, 0, -30, 3);
+pathStrip(0, -10, 0, 36, 3); pathStrip(-36, 0, 36, 0, 3); pathStrip(0, -10, 0, -36, 3);
 
-const CENTER = {x:0, z:-17, w:7, d:5};
-const HEAL_SPOT = {x:0, z:-13.2};
-(function buildCenter(){
-  const g = new T.Group();
-  const walls = mesh(new T.BoxGeometry(CENTER.w, 3.2, CENTER.d), toon('#fff6ea')); walls.position.y = 1.6; g.add(walls);
-  const roof = mesh(new T.ConeGeometry(CENTER.w*0.78, 2.2, 4), toon('#ff5a36')); roof.position.y = 4.3; roof.rotation.y = Math.PI/4; roof.scale.z = CENTER.d/CENTER.w*1.1; g.add(roof);
-  const door = mesh(new T.BoxGeometry(1.6, 2.2, 0.1), toon('#6fc3ff')); door.position.set(0, 1.1, CENTER.d/2 + 0.02); g.add(door);
-  const signA = mesh(new T.BoxGeometry(1.4, 0.4, 0.12), toon('#ff5a36')); signA.position.set(0, 2.75, CENTER.d/2 + 0.08); g.add(signA);
-  const signB = mesh(new T.BoxGeometry(0.4, 1.4, 0.12), toon('#ff5a36')); signB.position.set(0, 2.75, CENTER.d/2 + 0.09); g.add(signB);
+/* ---------- Cidades ----------
+   Cada cidade é só dados em TOWNS: prédios (Centro de Cura, Loja, Caixa de Animais, casas), praça, poço,
+   postes e moradores. Pra criar outra cidade, outro Centro ou outra Loja, é só acrescentar uma entrada.
+   Prédios: {type, x, z, ry} com ry em múltiplos de 90° (0 = porta virada pro +z). */
+const TOWNS = [
+  {name:'Praça Central', x:3, z:-15, r:8.5,
+    buildings:[{type:'center', x:0, z:-17}, {type:'shop', x:10, z:-16}, {type:'box', x:4.4, z:-14.2}],
+    npcs:[{x:-3.5, z:-12.5, jacket:'#d63b8f', lines:'centro', home:[-3.5, -12.5, 2]}]},
+  {name:'Vila Pancada', x:25, z:26, r:10, plaza:4.6, well:true, lamps:[[21.5, 24], [28.5, 28]],
+    buildings:[
+      {type:'house', x:20, z:21, w:3.2, d:2.8, wall:'#ffe1a8', roof:'#3b64d6', door:1},
+      {type:'house', x:30, z:21, w:3.0, d:2.6, wall:'#ffd0d0', roof:'#2b9a4a', door:1},
+      {type:'house', x:20, z:31, w:3.4, d:3.0, wall:'#d6f0ff', roof:'#d9472b', door:-1},
+      {type:'house', x:30, z:31, w:3.0, d:2.8, wall:'#e8ffd6', roof:'#8e44ad', door:-1}],
+    npcs:[
+      {x:23, z:24, jacket:'#3b64d6', lines:'vila', home:[25, 26, 4.5]},
+      {x:27, z:28, jacket:'#8e44ad', lines:'vila', home:[25, 26, 4.5]},
+      {x:24, z:28.5, jacket:'#2b9a4a', lines:'vila', home:[25, 26, 4.5]}]}
+];
+const rects = [];
+// tapetes de interação: {kind:'heal'|'shop'|'box', x, z, r (alcance), b (prédio), lz}
+const SPOTS = [];
+const SPOT_TEXT = {heal:'E: curar seu time', shop:'E: entrar na loja', box:'E: abrir a Caixa de Animais'};
+// ponto local de um prédio -> mundo (mesma convenção do rotation.y do three.js)
+const rotPt = (b, lx, lz) => { const c = Math.cos(b.ry || 0), s = Math.sin(b.ry || 0); return {x:b.x + lx*c + lz*s, z:b.z - lx*s + lz*c}; };
+function solidLocal(b, lx, lz, hw, hd, h){
+  const p = rotPt(b, lx, lz);
+  if (Math.abs(Math.sin(b.ry || 0)) > 0.5) [hw, hd] = [hd, hw];
+  rects.push({x:p.x, z:p.z, hw, hd}); staticBox(p.x, h/2, p.z, hw, h/2, hd);
+}
+function colliderLocal(b, lx, lz, r){ const p = rotPt(b, lx, lz); colliders.push({x:p.x, z:p.z, r}); }
+function spotMat(b, kind, lz, r, col, reach){
+  const p = rotPt(b, 0, lz);
+  const m = mesh(new T.CircleGeometry(r, 24), lam(col), false); m.rotation.x = -Math.PI/2; m.position.set(p.x, 0.02, p.z); scene.add(m);
+  SPOTS.push({kind, x:p.x, z:p.z, r:reach, b, lz});
+}
+const nearestSpot = (kind, x, z) => SPOTS.filter(s => s.kind === kind).sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z))[0];
+function placeGroup(g, b){ g.position.set(b.x, 0, b.z); g.rotation.y = b.ry || 0; scene.add(g); }
+
+// Centro de Cura
+function buildCenter(b){
+  const g = new T.Group(), W = 7, D = 5;
+  const walls = mesh(new T.BoxGeometry(W, 3.2, D), toon('#fff6ea')); walls.position.y = 1.6; g.add(walls);
+  const roof = mesh(new T.ConeGeometry(W*0.78, 2.2, 4), toon('#ff5a36')); roof.position.y = 4.3; roof.rotation.y = Math.PI/4; roof.scale.z = D/W*1.1; g.add(roof);
+  const door = mesh(new T.BoxGeometry(1.6, 2.2, 0.1), toon('#6fc3ff')); door.position.set(0, 1.1, D/2 + 0.02); g.add(door);
+  const signA = mesh(new T.BoxGeometry(1.4, 0.4, 0.12), toon('#ff5a36')); signA.position.set(0, 2.75, D/2 + 0.08); g.add(signA);
+  const signB = mesh(new T.BoxGeometry(0.4, 1.4, 0.12), toon('#ff5a36')); signB.position.set(0, 2.75, D/2 + 0.09); g.add(signB);
   outline(walls, 1.02); outline(roof, 1.03);
   // fundação de pedra, faixa vermelha no topo, degrau e moldura da porta
-  const base = mesh(GB, toon('#c9bfae')); base.scale.set(CENTER.w + 0.3, 0.35, CENTER.d + 0.3); base.position.y = 0.175; g.add(base);
-  const trim = mesh(GB, toon('#ff5a36')); trim.scale.set(CENTER.w + 0.08, 0.22, CENTER.d + 0.08); trim.position.y = 3.1; g.add(trim);
-  const step = mesh(GB, toon('#d8d0c0')); step.scale.set(2.2, 0.14, 0.6); step.position.set(0, 0.07, CENTER.d/2 + 0.45); g.add(step);
-  const dframe = mesh(GB, toon('#ffffff')); dframe.scale.set(1.85, 2.35, 0.06); dframe.position.set(0, 1.17, CENTER.d/2 + 0.005); g.add(dframe);
-  const dsplit = mesh(GB, toon('#ffffff'), false); dsplit.scale.set(0.06, 2.2, 0.13); dsplit.position.set(0, 1.1, CENTER.d/2 + 0.02); g.add(dsplit);
+  const base = mesh(GB, toon('#c9bfae')); base.scale.set(W + 0.3, 0.35, D + 0.3); base.position.y = 0.175; g.add(base);
+  const trim = mesh(GB, toon('#ff5a36')); trim.scale.set(W + 0.08, 0.22, D + 0.08); trim.position.y = 3.1; g.add(trim);
+  const step = mesh(GB, toon('#d8d0c0')); step.scale.set(2.2, 0.14, 0.6); step.position.set(0, 0.07, D/2 + 0.45); g.add(step);
+  const dframe = mesh(GB, toon('#ffffff')); dframe.scale.set(1.85, 2.35, 0.06); dframe.position.set(0, 1.17, D/2 + 0.005); g.add(dframe);
+  const dsplit = mesh(GB, toon('#ffffff'), false); dsplit.scale.set(0.06, 2.2, 0.13); dsplit.position.set(0, 1.1, D/2 + 0.02); g.add(dsplit);
   for (const sx of [-1, 1]){
-    windowAt(g, sx*2.4, 1.6, CENTER.d/2 + 0.03, 0, 1.2, 0.9);
-    windowAt(g, sx*(CENTER.w/2 + 0.03), 1.7, 0, sx*Math.PI/2, 1.4, 0.9);
+    windowAt(g, sx*2.4, 1.6, D/2 + 0.03, 0, 1.2, 0.9);
+    windowAt(g, sx*(W/2 + 0.03), 1.7, 0, sx*Math.PI/2, 1.4, 0.9);
     // vasos com plantinha dos dois lados da porta
-    const pot = mesh(new T.CylinderGeometry(0.28, 0.2, 0.45, 10), toon('#c96a3b')); pot.position.set(sx*1.45, 0.22, CENTER.d/2 + 0.4); outline(pot, 1.08); g.add(pot);
-    const leaf = mesh(new T.IcosahedronGeometry(0.38, 0), toon('#4aaa4f')); leaf.position.set(sx*1.45, 0.7, CENTER.d/2 + 0.4); g.add(leaf);
-    for (let i = 0; i < 3; i++){ const fl = mesh(GS, toon('#ff8fb1'), false); fl.scale.setScalar(0.07); fl.position.set(sx*1.45 + rand(-0.2, 0.2), 0.85 + rand(0, 0.15), CENTER.d/2 + 0.6); g.add(fl); }
-    colliders.push({x:CENTER.x + sx*1.45, z:CENTER.z + CENTER.d/2 + 0.4, r:0.3});
+    const pot = mesh(new T.CylinderGeometry(0.28, 0.2, 0.45, 10), toon('#c96a3b')); pot.position.set(sx*1.45, 0.22, D/2 + 0.4); outline(pot, 1.08); g.add(pot);
+    const leaf = mesh(new T.IcosahedronGeometry(0.38, 0), toon('#4aaa4f')); leaf.position.set(sx*1.45, 0.7, D/2 + 0.4); g.add(leaf);
+    for (let i = 0; i < 3; i++){ const fl = mesh(GS, toon('#ff8fb1'), false); fl.scale.setScalar(0.07); fl.position.set(sx*1.45 + rand(-0.2, 0.2), 0.85 + rand(0, 0.15), D/2 + 0.6); g.add(fl); }
+    colliderLocal(b, sx*1.45, D/2 + 0.4, 0.3);
   }
-  const mat = mesh(new T.CircleGeometry(1.1, 24), lam('#ffb4a3'), false); mat.rotation.x = -Math.PI/2; mat.position.set(HEAL_SPOT.x, 0.02, HEAL_SPOT.z); scene.add(mat);
-  g.position.set(CENTER.x, 0, CENTER.z); scene.add(g);
-  const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(CENTER.w/2, 1.6, CENTER.d/2)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
-  b.position.set(CENTER.x, 1.6, CENTER.z); b.isStatic = true; world.addBody(b);
-})();
+  spotMat(b, 'heal', D/2 + 1.3, 1.1, '#ffb4a3', 1.6);
+  placeGroup(g, b); solidLocal(b, 0, 0, W/2, D/2, 3.2);
+}
 
-const SHOP = {x:10, z:-16, w:4.4, d:2.6};
-const SHOP_SPOT = {x:10, z:-13.6};
-const rects = [{x:CENTER.x, z:CENTER.z, hw:CENTER.w/2, hd:CENTER.d/2}, {x:SHOP.x, z:SHOP.z, hw:SHOP.w/2, hd:SHOP.d/2}];
-(function buildShop(){
-  const g = new T.Group();
+// Loja do Mato
+function buildShop(b){
+  const g = new T.Group(), W = 4.4, D = 2.6;
   const wood = toon('#b07a45'), dark = toon('#7a4f2a');
-  const counter = mesh(new T.BoxGeometry(SHOP.w, 1.0, SHOP.d), wood); counter.position.y = 0.5; g.add(counter);
-  const top = mesh(new T.BoxGeometry(SHOP.w + 0.2, 0.12, SHOP.d + 0.2), dark); top.position.y = 1.06; g.add(top);
-  for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){ const p = mesh(new T.CylinderGeometry(0.08, 0.08, 2.6, 6), dark); p.position.set(sx*(SHOP.w/2 - 0.1), 1.3, sz*(SHOP.d/2 - 0.1)); g.add(p); }
+  const counter = mesh(new T.BoxGeometry(W, 1.0, D), wood); counter.position.y = 0.5; g.add(counter);
+  const top = mesh(new T.BoxGeometry(W + 0.2, 0.12, D + 0.2), dark); top.position.y = 1.06; g.add(top);
+  for (const [sx, sz] of [[-1,-1],[1,-1],[-1,1],[1,1]]){ const p = mesh(new T.CylinderGeometry(0.08, 0.08, 2.6, 6), dark); p.position.set(sx*(W/2 - 0.1), 1.3, sz*(D/2 - 0.1)); g.add(p); }
   const stripes = 8;
   for (let i = 0; i < stripes; i++){
-    const st = mesh(new T.BoxGeometry(SHOP.w/stripes + 0.01, 0.1, SHOP.d + 0.9), toon(i % 2 ? '#ffffff' : '#3aa64a'));
-    st.position.set(-SHOP.w/2 + SHOP.w/stripes*(i + 0.5), 2.7, 0.25); st.rotation.x = 0.18; g.add(st);
+    const st = mesh(new T.BoxGeometry(W/stripes + 0.01, 0.1, D + 0.9), toon(i % 2 ? '#ffffff' : '#3aa64a'));
+    st.position.set(-W/2 + W/stripes*(i + 0.5), 2.7, 0.25); st.rotation.x = 0.18; g.add(st);
   }
   const sign = new T.Mesh(new T.BoxGeometry(2.0, 0.6, 0.1), [wood, wood, wood, wood, new T.MeshBasicMaterial({map:signTexture(['Loja do Mato', 'frutos e curas'])}), wood]);
   sign.position.set(0, 3.2, 0.35); outline(sign, 1.04); g.add(sign);
   const coin = mesh(new T.CylinderGeometry(0.17, 0.17, 0.06, 16), toon('#f2c230')); coin.rotation.x = Math.PI/2; coin.position.set(-1.15, 3.2, 0.42); g.add(coin);
   // tábuas do balcão, barris nos fundos e lampião pendurado
-  for (let i = 0; i < 6; i++){ const pl = mesh(GB, dark, false); pl.scale.set(0.04, 0.9, 0.03); pl.position.set(-SHOP.w/2 + 0.35 + i*(SHOP.w - 0.7)/5, 0.5, SHOP.d/2 + 0.01); g.add(pl); }
+  for (let i = 0; i < 6; i++){ const pl = mesh(GB, dark, false); pl.scale.set(0.04, 0.9, 0.03); pl.position.set(-W/2 + 0.35 + i*(W - 0.7)/5, 0.5, D/2 + 0.01); g.add(pl); }
   for (const sx of [-1, 1]){
-    const br = mesh(new T.CylinderGeometry(0.34, 0.3, 0.8, 12), toon('#9a6a45')); br.position.set(sx*(SHOP.w/2 - 0.5), 0.4, -SHOP.d/2 - 0.45); outline(br, 1.06); g.add(br);
+    const br = mesh(new T.CylinderGeometry(0.34, 0.3, 0.8, 12), toon('#9a6a45')); br.position.set(sx*(W/2 - 0.5), 0.4, -D/2 - 0.45); outline(br, 1.06); g.add(br);
     for (const y of [0.15, 0.65]){ const hoop = mesh(new T.CylinderGeometry(0.35, 0.35, 0.05, 12), toon('#5a5148'), false); hoop.position.set(br.position.x, y, br.position.z); g.add(hoop); }
-    colliders.push({x:SHOP.x + sx*(SHOP.w/2 - 0.5), z:SHOP.z - SHOP.d/2 - 0.45, r:0.35});
+    colliderLocal(b, sx*(W/2 - 0.5), -D/2 - 0.45, 0.35);
   }
-  const lantern = mesh(new T.SphereGeometry(0.13, 10, 8), new T.MeshBasicMaterial({color:'#fff3a8'}), false); lantern.position.set(SHOP.w/2 - 0.3, 2.2, SHOP.d/2 - 0.1); g.add(lantern);
-  const cord = mesh(GY, dark, false); cord.scale.set(0.015, 0.4, 0.015); cord.position.set(SHOP.w/2 - 0.3, 2.47, SHOP.d/2 - 0.1); g.add(cord);
+  const lantern = mesh(new T.SphereGeometry(0.13, 10, 8), new T.MeshBasicMaterial({color:'#fff3a8'}), false); lantern.position.set(W/2 - 0.3, 2.2, D/2 - 0.1); g.add(lantern);
+  const cord = mesh(GY, dark, false); cord.scale.set(0.015, 0.4, 0.015); cord.position.set(W/2 - 0.3, 2.47, D/2 - 0.1); g.add(cord);
   // mercadorias no balcão
   const fruitCols = ['#d93a4a', '#f28c28', '#f2c230', '#c9925a', '#5b3a1f'];
-  for (let i = 0; i < 9; i++){ const f = mesh(new T.SphereGeometry(rand(0.1, 0.16), 10, 8), toon(fruitCols[i % 5])); f.position.set(-SHOP.w/2 + 0.4 + i*0.45, 1.25, 0.6 + rand(-0.2, 0.2)); g.add(f); }
-  for (const sx of [-1, 1]){ const cr = mesh(new T.BoxGeometry(0.7, 0.6, 0.7), wood); cr.position.set(sx*(SHOP.w/2 + 0.6), 0.3, 0.6); cr.rotation.y = rand(-0.3, 0.3); g.add(cr); colliders.push({x:SHOP.x + sx*(SHOP.w/2 + 0.6), z:SHOP.z + 0.6, r:0.5}); }
-  g.position.set(SHOP.x, 0, SHOP.z); scene.add(g);
-  const mat = mesh(new T.CircleGeometry(1.0, 24), lam('#f6e1a0'), false); mat.rotation.x = -Math.PI/2; mat.position.set(SHOP_SPOT.x, 0.02, SHOP_SPOT.z); scene.add(mat);
-  const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(SHOP.w/2, 0.8, SHOP.d/2)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
-  b.position.set(SHOP.x, 0.8, SHOP.z); b.isStatic = true; world.addBody(b);
-})();
+  for (let i = 0; i < 9; i++){ const f = mesh(new T.SphereGeometry(rand(0.1, 0.16), 10, 8), toon(fruitCols[i % 5])); f.position.set(-W/2 + 0.4 + i*0.45, 1.25, 0.6 + rand(-0.2, 0.2)); g.add(f); }
+  for (const sx of [-1, 1]){ const cr = mesh(new T.BoxGeometry(0.7, 0.6, 0.7), wood); cr.position.set(sx*(W/2 + 0.6), 0.3, 0.6); cr.rotation.y = rand(-0.3, 0.3); g.add(cr); colliderLocal(b, sx*(W/2 + 0.6), 0.6, 0.5); }
+  spotMat(b, 'shop', D/2 + 1.1, 1.0, '#f6e1a0', 1.5);
+  placeGroup(g, b); solidLocal(b, 0, 0, W/2, D/2, 1.6);
+}
 
-// Caixa de Animais: terminal ao lado do Centro onde ficam os animais fora do time
-const BOX = {x:4.4, z:-14.2};
-const BOX_SPOT = {x:4.4, z:-12.8};
-(function buildBox(){
+// Caixa de Animais: terminal onde ficam os animais fora do time
+function buildBox(b){
   const g = new T.Group();
   const base = mesh(new T.BoxGeometry(1.0, 1.1, 0.7), toon('#6fc3ff')); base.position.y = 0.55; g.add(base);
   const head = mesh(new T.BoxGeometry(1.1, 0.8, 0.8), toon('#fff6ea')); head.position.y = 1.5; g.add(head);
   const screen = mesh(new T.BoxGeometry(0.8, 0.5, 0.05), lam('#3aa64a')); screen.position.set(0, 1.52, 0.41); g.add(screen);
   const ball = mesh(new T.SphereGeometry(0.16, 12, 10), toon('#ff5a36')); ball.position.set(0, 2.05, 0); g.add(ball);
-  g.position.set(BOX.x, 0, BOX.z); scene.add(g);
-  const mat = mesh(new T.CircleGeometry(0.9, 24), lam('#b9e2ff'), false); mat.rotation.x = -Math.PI/2; mat.position.set(BOX_SPOT.x, 0.02, BOX_SPOT.z); scene.add(mat);
-  rects.push({x:BOX.x, z:BOX.z, hw:0.55, hd:0.4});
-  const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(0.55, 1, 0.4)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
-  b.position.set(BOX.x, 1, BOX.z); b.isStatic = true; world.addBody(b);
-})();
+  spotMat(b, 'box', 1.4, 0.9, '#b9e2ff', 1.3);
+  placeGroup(g, b); solidLocal(b, 0, 0, 0.55, 0.4, 2);
+}
+
+// poço com telhadinho no meio da praça
+function buildWell(x, z){
+  const g = new T.Group();
+  const wall = mesh(new T.CylinderGeometry(0.85, 0.9, 0.7, 14), toon('#a7a091')); wall.position.y = 0.35; outline(wall, 1.05); g.add(wall);
+  const water = mesh(new T.CircleGeometry(0.7, 16), lam('#4fb0e8'), false); water.rotation.x = -Math.PI/2; water.position.y = 0.62; g.add(water);
+  for (const sx of [-1, 1]){ const p = mesh(GY, toon('#8a5a3b')); p.scale.set(0.07, 1.6, 0.07); p.position.set(sx*0.7, 0.8, 0); g.add(p); }
+  const rf = mesh(new T.ConeGeometry(1.15, 0.7, 4), toon('#d9472b')); rf.rotation.y = Math.PI/4; rf.position.y = 1.85; outline(rf, 1.05); g.add(rf);
+  const bucket = mesh(new T.CylinderGeometry(0.16, 0.12, 0.22, 10), toon('#9a6a45')); bucket.position.y = 1.1; g.add(bucket);
+  g.position.set(x, 0, z); scene.add(g); solidCircle(x, z, 0.95, 1.5);
+}
+function buildLamp(x, z){
+  const p = mesh(GY, toon('#2a2140')); p.scale.set(0.06, 2.2, 0.06); p.position.set(x, 1.1, z); scene.add(p);
+  const l = mesh(GS, new T.MeshBasicMaterial({color:'#fff3a8'}), false); l.scale.setScalar(0.2); l.position.set(x, 2.25, z); scene.add(l);
+  colliders.push({x, z, r:0.15});
+}
+function buildTown(t){
+  if (t.plaza){ const m = mesh(new T.CircleGeometry(t.plaza, 32), lam('#e9d3a0'), false); m.rotation.x = -Math.PI/2; m.position.set(t.x, 0.018, t.z); scene.add(m); }
+  for (const b of t.buildings || []){
+    if (b.type === 'center') buildCenter(b);
+    else if (b.type === 'shop') buildShop(b);
+    else if (b.type === 'box') buildBox(b);
+    else if (b.type === 'house') house(b.x, b.z, b.w, b.d, b.wall, b.roof, b.door);
+  }
+  if (t.well) buildWell(t.x, t.z);
+  for (const [x, z] of t.lamps || []) buildLamp(x, z);
+}
 
 // Arena PvP: onde os duelos entre jogadores acontecem
 const ARENA = {x:-25, z:-2, r:6.5};
@@ -469,17 +555,51 @@ const PATCHES = [
   {x:29, z:5, r:5, lv:[4,7], pool:['canguru','lobo','raposa','javali'], name:'Mato do Leste'},
   {x:-29, z:29, r:5, lv:[7,10], pool:['gorila','urso','coruja','guepardo'], name:'Bosque Sombrio'}
 ];
+PATCHES.forEach(p => p.region = 0);
 const POND = {x:-12, z:25, r:4.5};
 
 /* ---------- Lugares do mapa: vila, fazenda, acampamento, lago, bosque ---------- */
 const ZONES = [
-  {name:'Vila Pancada', x:25, z:26, r:10},
+  ...TOWNS.map(t => ({name:t.name, x:t.x, z:t.z, r:t.r})),
   {name:'Fazenda do Seu Zé', x:-27, z:-29, r:8},
   {name:'Bosque Sombrio', x:-29, z:29, r:10},
   {name:'Acampamento', x:12, z:-31, r:6},
   {name:'Lago Raso', x:POND.x, z:POND.z, r:7},
   {name:'Arena PvP', x:ARENA.x, z:ARENA.z, r:8.5}
 ];
+/* ---------- Portais entre os mapas ----------
+   Os Campos Pancada têm um portal em cada ponta da estrada; cada outro mapa tem um portal de volta na borda oeste.
+   ry vira a frente do arco pro meio do mapa; quem chega aparece 3,2 na frente do portal de destino. */
+const PORTALS = [
+  {region:0, x:37.5, z:0, ry:-Math.PI/2, to:1},
+  {region:0, x:0, z:37.5, ry:Math.PI, to:2},
+  {region:0, x:0, z:-37.5, ry:0, to:3},
+  {region:0, x:-37.5, z:0, ry:Math.PI/2, to:4},
+  ...[1, 2, 3, 4].map(i => ({region:i, x:REGIONS[i].cx - 37.5, z:0, ry:Math.PI/2, to:0}))
+];
+const portalFx = [];
+const portalArrival = (from, to) => { const q = PORTALS.find(o => o.region === to && o.to === from); return {...rotPt(q, 0, 3.2), ry:q.ry}; };
+function buildPortal(p){
+  const dest = REGIONS[p.to], g = new T.Group(), stone = toon('#a7a091'), glow = new T.MeshBasicMaterial({color:dest.col});
+  for (const sx of [-1, 1]){
+    const col = mesh(GB, stone); col.scale.set(0.6, 3.2, 0.6); col.position.set(sx*1.6, 1.6, 0); outline(col, 1.04); g.add(col);
+    const cap = mesh(GB, toon('#8f887b')); cap.scale.set(0.8, 0.25, 0.8); cap.position.set(sx*1.6, 0.12, 0); g.add(cap);
+    for (let i = 0; i < 3; i++){ const rn = mesh(GB, glow, false); rn.scale.set(0.08, 0.3, 0.62); rn.position.set(sx*1.6, 0.8 + i*0.9, 0); g.add(rn); }
+    solidLocal(p, sx*1.6, 0, 0.32, 0.32, 3.2);
+  }
+  const top = mesh(GB, stone); top.scale.set(4.1, 0.55, 0.75); top.position.y = 3.45; outline(top, 1.03); g.add(top);
+  const gem = mesh(new T.OctahedronGeometry(0.32, 0), glow); gem.position.y = 4.15; outline(gem, 1.12); g.add(gem);
+  const swirl = mesh(new T.CircleGeometry(1.25, 32), new T.MeshBasicMaterial({color:dest.col, transparent:true, opacity:0.7, side:T.DoubleSide}), false);
+  swirl.position.y = 1.6; swirl.scale.y = 1.2; g.add(swirl);
+  const rings = [1.0, 0.62].map((rr, i) => { const m = mesh(new T.TorusGeometry(rr, 0.06, 6, 24, Math.PI*1.4), new T.MeshBasicMaterial({color:'#ffffff', side:T.DoubleSide}), false); m.position.z = 0.02*(i + 1); swirl.add(m); return m; });
+  const pad = mesh(new T.CircleGeometry(1.4, 24), lam(dest.col), false); pad.rotation.x = -Math.PI/2; pad.position.set(0, 0.02, 1.0); g.add(pad);
+  placeGroup(g, p);
+  portalFx.push({swirl, rings, gem});
+  const s = rotPt(p, 0, 1.0);
+  SPOTS.push({kind:'portal', x:s.x, z:s.z, r:1.6, b:p, lz:1.0, to:p.to});
+  const sp = rotPt(p, 3.2, 1.4); sign(sp.x, sp.z, [dest.name, dest.lv]);
+  ZONES.push({name:'Portal: ' + dest.name, x:p.x, z:p.z, r:3.2});
+}
 const fires = [];
 function staticBox(x, y, z, hw, hh, hd){
   const b = new C.Body({mass:0, shape:new C.Box(new C.Vec3(hw, hh, hd)), collisionFilterGroup:G_STATIC, collisionFilterMask:ALL});
@@ -563,26 +683,9 @@ function bush(x, z, s){
   pathStrip(1.5, 26, 21, 26, 2.4); pathStrip(-1.5, -23, -27, -23, 2.2); pathStrip(1.5, -31, 9.5, -31, 2);
   const disc = (x, z, r, col, y=0.02) => { const m = mesh(new T.CircleGeometry(r, 32), lam(col), false); m.rotation.x = -Math.PI/2; m.position.set(x, y, z); scene.add(m); return m; };
 
-  // Vila Pancada
-  disc(25, 26, 4.6, '#e9d3a0', 0.018);
-  house(20, 21, 3.2, 2.8, '#ffe1a8', '#3b64d6', 1);
-  house(30, 21, 3.0, 2.6, '#ffd0d0', '#2b9a4a', 1);
-  house(20, 31, 3.4, 3.0, '#d6f0ff', '#d9472b', -1);
-  house(30, 31, 3.0, 2.8, '#e8ffd6', '#8e44ad', -1);
-  {
-    const g = new T.Group();
-    const wall = mesh(new T.CylinderGeometry(0.85, 0.9, 0.7, 14), toon('#a7a091')); wall.position.y = 0.35; outline(wall, 1.05); g.add(wall);
-    const water = mesh(new T.CircleGeometry(0.7, 16), lam('#4fb0e8'), false); water.rotation.x = -Math.PI/2; water.position.y = 0.62; g.add(water);
-    for (const sx of [-1, 1]){ const p = mesh(GY, toon('#8a5a3b')); p.scale.set(0.07, 1.6, 0.07); p.position.set(sx*0.7, 0.8, 0); g.add(p); }
-    const rf = mesh(new T.ConeGeometry(1.15, 0.7, 4), toon('#d9472b')); rf.rotation.y = Math.PI/4; rf.position.y = 1.85; outline(rf, 1.05); g.add(rf);
-    const bucket = mesh(new T.CylinderGeometry(0.16, 0.12, 0.22, 10), toon('#9a6a45')); bucket.position.y = 1.1; g.add(bucket);
-    g.position.set(25, 0, 26); scene.add(g); solidCircle(25, 26, 0.95, 1.5);
-  }
-  for (const [x, z] of [[21.5, 24], [28.5, 28]]){
-    const p = mesh(GY, toon('#2a2140')); p.scale.set(0.06, 2.2, 0.06); p.position.set(x, 1.1, z); scene.add(p);
-    const l = mesh(GS, new T.MeshBasicMaterial({color:'#fff3a8'}), false); l.scale.setScalar(0.2); l.position.set(x, 2.25, z); scene.add(l);
-    colliders.push({x, z, r:0.15});
-  }
+  // cidades: Centro de Cura, Loja, Caixa, casas, praça e poço vêm de TOWNS
+  TOWNS.forEach(buildTown);
+  PORTALS.filter(p => p.region === 0).forEach(buildPortal);
 
   // Fazenda do Seu Zé
   const FX = -27, FZ = -29, fw = 6, fd = 5, wood = toon('#9a6a45');
@@ -693,6 +796,7 @@ function bush(x, z, s){
   sign(-19.2, 26.4, ['Bosque Sombrio', 'nível 7–10!']);
   sign(3.2, -29.2, ['Acampamento', 'tem fogueira']);
   sign(3.2, 3.2, ['Centro ↓  Vila ↗', 'Arena ←  Leste →']);
+  sign(-3.2, 3.2, ['4 portais', 'um em cada ponta']);
 })();
 
 (function buildNature(){
@@ -859,6 +963,7 @@ function bush(x, z, s){
   }
   instanced(rockG, toon('#ffffff'), pebbles);
 })();
+regionClaim(REGIONS[0], mark0);
 
 /* ================= Treinador ================= */
 const trainer = {pos:new T.Vector3(0, 0, -11), yaw:Math.PI, walk:0, moving:false, throwT:0, cheerT:0};
@@ -961,7 +1066,8 @@ function animateTrainer(m, st, dt){
 })();
 const trainerFwd = () => new T.Vector3(Math.sin(trainer.yaw), 0, Math.cos(trainer.yaw));
 function resolveCollision(x, z, rad, skip=null){
-  x = clamp(x, -MAP + 1, MAP - 1); z = clamp(z, -MAP + 1, MAP - 1);
+  const rg = regionAt(x);
+  x = clamp(x, rg.cx - MAP + 1, rg.cx + MAP - 1); z = clamp(z, rg.cz - MAP + 1, rg.cz + MAP - 1);
   for (const c of colliders){ if (c === skip) continue; const ex = x - c.x, ez = z - c.z, d = Math.hypot(ex, ez), m = c.r + rad; if (d < m && d > 1e-4){ x = c.x + ex/d*m; z = c.z + ez/d*m; } }
   for (const r of rects){
     const hw = r.hw + rad, hd = r.hd + rad;
@@ -985,7 +1091,16 @@ const NPC_SETS = {
   fazenda:['Esse espantalho não espanta nada. Ele tem medo de corvo.', 'Minhas abóboras são orgânicas. E levemente assombradas.', 'Um Javali comeu metade da plantação e pediu sobremesa.', 'Não pisa nas abóboras! ...Tá, pode pisar, elas nem ligam.'],
   camp:['Tô esperando o marshmallow dourar. Faz três dias.', 'Ouvi um Gorila socando o chão no Mato Bravo. Ou era trovão.', 'Dica: se o bicho estiver nocauteado, a captura fica mais fácil.'],
   lago:['Ainda não pesquei nada. Mas o Lago Raso tem 30 centímetros.', 'Shh! Você vai espantar os peixes imaginários.', 'Hoje um Javali roubou minha isca. E minha bota.'],
-  centro:['O Centro de Cura cura tudo. Menos tédio.', 'Dica: a Pinha captura melhor que a Bolota. O Coco melhor ainda.', 'Quer duelar com amigo? Chega perto dele e aperta F!']
+  centro:['O Centro de Cura cura tudo. Menos tédio.', 'Dica: a Pinha captura melhor que a Bolota. O Coco melhor ainda.', 'Quer duelar com amigo? Chega perto dele e aperta F!',
+    'Cada ponta da estrada tem um portal pra outro mapa. Os bichos de lá são bem mais fortes.'],
+  sertao:['Aqui faz tanto calor que o Javali já vem assado. Brincadeira. Ele morde.', 'Esse cacto me abraçou. Eu não pedi.', 'O Guepardo do sertão corre tanto que levanta poeira de ontem.',
+    'Viu o esqueleto gigante? Dizem que era um Canguru que pulou alto demais.', 'Água no oásis é de graça. Sombra é extra.'],
+  gelo:['Meu nariz congelou. Agora é um picolé de nariz.', 'O boneco de neve ali olha pra mim. Sempre.', 'Urso do Pico não hiberna. Ele soca.',
+    'Não corre no lago congelado! ...Tá, pode correr. Mas eu vou rir.', 'Iglu é quentinho por dentro. Mentira, é gelado também.'],
+  brejo:['Bem-vindo ao Brejo! Cuidado onde pisa. E onde senta. E onde respira.', 'Os vaga-lumes daqui brilham mais que o meu futuro.', 'Um Gorila caiu na lama e saiu Gorila de chocolate.',
+    'A Árvore Anciã tem mil anos. Ela não fala, mas julga.', 'Minha casa é de palafita. Quando o Rinoceronte passa, vira pula-pula.'],
+  vulcao:['O chão é lava! Sério. Ali, ó. Não encosta.', 'Aqui os bichos são nível 28. Eu sou nível 1 e meio.', 'Esquentei meu café na lava. Agora ele é lava também.',
+    'Quem chega na Boca do Vulcão volta com a sobrancelha torrada.', 'Dica: cure seu time antes de ir pro mato. A cratera não perdoa.']
 };
 const npcs = [];
 function makeNpc(x, z, jacket, home, set, opts={}){
@@ -999,16 +1114,484 @@ function makeNpc(x, z, jacket, home, set, opts={}){
   colliders.push(n.col = {x, z, r:0.3});
   npcs.push(n); return n;
 }
-makeNpc(23, 24, '#3b64d6', {x:25, z:26, r:4.5}, 'vila');
-makeNpc(27, 28, '#8e44ad', {x:25, z:26, r:4.5}, 'vila');
-makeNpc(24, 28.5, '#2b9a4a', {x:25, z:26, r:4.5}, 'vila');
+// moradores das cidades (TOWNS); home = [x, z, raio] por onde eles passeiam
+for (const t of TOWNS) for (const n of t.npcs || []) makeNpc(n.x, n.z, n.jacket, {x:n.home[0], z:n.home[1], r:n.home[2]}, n.lines);
 makeNpc(-24, -27, '#4a7bd0', {x:-24.5, z:-27.5, r:2.5}, 'fazenda');
 makeNpc(10.2, -32.2, '#f28c28', {x:10.5, z:-32, r:0.8}, 'camp');
 makeNpc(POND.x + 1.2, POND.z - POND.r + 2.1, '#16a3a3', null, 'lago', {still:true, rod:true, yaw:0});
-makeNpc(-3.5, -12.5, '#d63b8f', {x:-3.5, z:-12.5, r:2}, 'centro');
+
+/* ================= Mapas novos ================= */
+// cada construtor usa coordenadas locais (lx, lz) em volta do centro do mapa
+const bladeGeo = new T.ConeGeometry(0.1, 0.7, 3); bladeGeo.translate(0, 0.35, 0);
+const bladeMat = new T.MeshLambertMaterial({color:'#ffffff'});
+const lavaMat = new T.MeshBasicMaterial({color:'#ff6a1f'}), emberMat = new T.MeshBasicMaterial({color:'#ffb347'});
+const nearPath = (x, z, m) => paths.some(p => {
+  const dx = p.x2 - p.x1, dz = p.z2 - p.z1, t = clamp(((x - p.x1)*dx + (z - p.z1)*dz)/(dx*dx + dz*dz), 0, 1);
+  return Math.hypot(x - p.x1 - dx*t, z - p.z1 - dz*t) < p.w/2 + m;
+});
+// lugar livre pra pôr cenário: longe de caminho, prédio, mato, lugar com nome e de outros obstáculos
+function freeAt(x, z, pad=0){
+  if (!inRegion(x, z, regionAt(x), 3)) return false;
+  if (nearPath(x, z, 1.2 + pad)) return false;
+  if (rects.some(r => Math.abs(x - r.x) < r.hw + 2 + pad && Math.abs(z - r.z) < r.hd + 3 + pad)) return false;
+  if (PATCHES.some(p => Math.hypot(x - p.x, z - p.z) < p.r + 1.5 + pad)) return false;
+  if (ZONES.some(zn => Math.hypot(x - zn.x, z - zn.z) < zn.r + pad)) return false;
+  return !colliders.some(c => Math.hypot(x - c.x, z - c.z) < c.r + 1.2 + pad);
+}
+function scatter(r, n, pad, fn){
+  let placed = 0, tries = 0;
+  while (placed < n && tries++ < n*60){ const x = r.cx + rand(-MAP + 3, MAP - 3), z = r.cz + rand(-MAP + 3, MAP - 3); if (freeAt(x, z, pad)){ fn(x, z); placed++; } }
+}
+// enfeites na borda do mapa (só visual: as paredes invisíveis já seguram todo mundo)
+function edgeRing(r, fn){
+  for (let i = -MAP; i <= MAP; i += 3.3) for (const [x, z] of [[i, -MAP - 1], [i, MAP + 1], [-MAP - 1, i], [MAP + 1, i]]) fn(r.cx + x + rand(-0.5, 0.5), r.cz + z + rand(-0.5, 0.5));
+}
+const gdisc = (x, z, rad, col, y=0.012) => { const m = mesh(new T.CircleGeometry(rad, 32), lam(col), false); m.rotation.x = -Math.PI/2; m.position.set(x, y, z); scene.add(m); return m; };
+function solidCyl(x, z, rad, y=-0.1){
+  const b = new C.Body({mass:0, collisionFilterGroup:G_STATIC, collisionFilterMask:ALL}), q = new C.Quaternion(); q.setFromAxisAngle(AX, -Math.PI/2);
+  b.addShape(new C.Cylinder(rad, rad, 0.6, 16), new C.Vec3(0, 0, 0), q); b.position.set(x, y, z); b.isStatic = true; world.addBody(b);
+  colliders.push({x, z, r:rad});
+}
+// água/lama/lava: disco com borda; solid = ninguém entra
+function pool(x, z, rad, col, rim, mat){
+  const w = mesh(new T.CircleGeometry(rad, 36), mat || new T.MeshLambertMaterial({color:col}), false); w.rotation.x = -Math.PI/2; w.position.set(x, 0.03, z); scene.add(w);
+  const rr = mesh(new T.RingGeometry(rad, rad + 0.45, 36), lam(rim), false); rr.rotation.x = -Math.PI/2; rr.position.set(x, 0.025, z); scene.add(rr);
+  solidCyl(x, z, rad);
+}
+// mato de bicho selvagem com capim da cor do bioma
+function biomePatch(r, p, cols, floor){
+  p.x += r.cx; p.z += r.cz; p.region = r.id; PATCHES.push(p);
+  const items = [], n = Math.round(p.r*p.r*9);
+  for (let i = 0; i < n; i++){
+    const a = rand(0, TAU), d = Math.sqrt(Math.random())*p.r, sc = rand(0.8, 1.4);
+    items.push({x:p.x + Math.cos(a)*d, z:p.z + Math.sin(a)*d, rx:rand(-0.25, 0.25), ry:rand(0, TAU), rz:rand(-0.25, 0.25), sx:sc, sy:sc*rand(0.9, 1.3), sz:sc, c:pick(cols)});
+  }
+  instanced(bladeGeo, bladeMat, items);
+  gdisc(p.x, p.z, p.r + 0.3, floor, 0.015);
+}
+// tufinhos e pedrinhas soltos pelo chão
+function speckle(r, n, cols, pebbleCols){
+  const blades = [], pebbles = [];
+  for (let i = 0; i < n; i++){
+    const x = r.cx + rand(-MAP + 1, MAP - 1), z = r.cz + rand(-MAP + 1, MAP - 1);
+    if (nearPath(x, z, 0.3) || ZONES.some(zn => zn.bare && Math.hypot(x - zn.x, z - zn.z) < zn.bare) || rects.some(q => Math.abs(x - q.x) < q.hw + 0.4 && Math.abs(z - q.z) < q.hd + 0.4) || colliders.some(c => c.r > 1.5 && Math.hypot(x - c.x, z - c.z) < c.r + 0.5)) continue;
+    if (cols && Math.random() < 0.6){ const ry = rand(0, TAU), c = pick(cols); for (let k = 0; k < 3; k++) blades.push({x:x + rand(-0.1, 0.1), z:z + rand(-0.1, 0.1), ry:ry + k*2.1, rx:rand(-0.35, 0.35), rz:rand(-0.35, 0.35), s:rand(0.4, 0.7), c}); }
+    else pebbles.push({x, y:0.03, z, s:rand(0.07, 0.16), sy:rand(0.04, 0.08), ry:rand(0, TAU), c:pick(pebbleCols)});
+  }
+  instanced(bladeGeo, bladeMat, blades);
+  instanced(new T.DodecahedronGeometry(1, 0), toon('#ffffff'), pebbles);
+}
+// cidade padrão de cada mapa: Centro de Cura, Caixa e Loja, igual à Praça Central
+function regionTown(r, name, extra, npcs, set){
+  const X = r.cx, t = {name, x:X - 22, z:-15, r:10,
+    buildings:[{type:'center', x:X - 26, z:-17}, {type:'box', x:X - 21.6, z:-14.2}, {type:'shop', x:X - 16, z:-16}, ...extra.map(b => ({...b, x:b.x + X}))],
+    lamps:[[X - 18.5, -10.5], [X - 28.5, -10.5]], npcs:[]};
+  TOWNS.push(t); buildTown(t); ZONES.push({name, x:t.x, z:t.z, r:t.r});
+  pathStrip(X - 22, -1.5, X - 22, -11, 2.4, r.path);
+  for (const [lx, lz, jacket] of npcs) makeNpc(X + lx, lz, jacket, {x:X - 22, z:-8.5, r:2.5}, set);
+}
+function regionRoad(r, x2){ pathStrip(r.cx - 37, 0, r.cx + x2, 0, 3, r.path); }
+// pedra comum com cor do bioma
+function boulder(x, z, s, cols, cap){
+  const rk = mesh(new T.DodecahedronGeometry(1, 0), toon(pick(cols))); rk.position.set(x, s*0.4, z); rk.scale.set(s, s*0.75, s); rk.rotation.set(rand(0, 1), rand(0, TAU), 0); outline(rk, 1.04); scene.add(rk);
+  if (cap){ const m = mesh(new T.DodecahedronGeometry(1, 0), toon(cap), false); m.position.set(x, s*0.82, z); m.scale.set(s*0.7, s*0.18, s*0.65); m.rotation.y = rand(0, TAU); scene.add(m); }
+  solidCircle(x, z, s*0.9, s);
+}
+
+/* ---------- Mapa 1: Sertão Rachado ---------- */
+function cactus(x, z, s, solid=true){
+  const g = new T.Group(), green = toon(pick(['#5aa04a', '#4f9442', '#63ab52']));
+  const trunk = mesh(GY, green); trunk.scale.set(0.28, 2.2, 0.28); trunk.position.y = 1.1; outline(trunk, 1.07); g.add(trunk);
+  const top = mesh(GS, green); top.scale.setScalar(0.28); top.position.y = 2.2; g.add(top);
+  for (const sx of [-1, 1]){
+    if (Math.random() < 0.25) continue;
+    const h = rand(0.8, 1.4), y = rand(0.8, 1.3);
+    const arm = mesh(GY, green); arm.scale.set(0.17, 0.55, 0.17); arm.rotation.z = Math.PI/2; arm.position.set(sx*0.45, y, 0); g.add(arm);
+    const up = mesh(GY, green); up.scale.set(0.17, h*0.6, 0.17); up.position.set(sx*0.72, y + h*0.3, 0); outline(up, 1.08); g.add(up);
+    const tip = mesh(GS, green, false); tip.scale.setScalar(0.17); tip.position.set(sx*0.72, y + h*0.6, 0); g.add(tip);
+  }
+  if (Math.random() < 0.4){ const f = mesh(GS, toon(pick(['#ff8fb1', '#ffd23f', '#ff6b6b'])), false); f.scale.set(0.14, 0.08, 0.14); f.position.y = 2.46; g.add(f); }
+  g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(0, TAU); scene.add(g);
+  if (solid) solidCircle(x, z, 0.4*s, 2.2*s);
+}
+function palm(x, z, s){
+  const g = new T.Group(), bark = toon('#a8784a'), lean = rand(-0.25, 0.25);
+  let px = 0, py = 0;
+  for (let i = 0; i < 6; i++){ const seg = mesh(new T.CylinderGeometry(0.17 - i*0.012, 0.2 - i*0.012, 0.6, 7), bark); px += lean*0.25*i; py += 0.55; seg.position.set(px, py - 0.25, 0); seg.rotation.z = -lean*0.4; outline(seg, 1.06); g.add(seg); }
+  const leafG = new T.ConeGeometry(0.28, 1.9, 4);
+  for (let i = 0; i < 7; i++){ const a = i/7*TAU, l = mesh(leafG, toon(pick(['#3f9d48', '#4aaa4f'])), false); l.scale.z = 0.25; l.position.set(px + Math.cos(a)*0.75, py + 0.05, Math.sin(a)*0.75); l.rotation.set(0, -a, Math.PI/2 + 0.45); l.rotation.order = 'YZX'; g.add(l); }
+  for (let i = 0; i < 3; i++){ const c = mesh(GS, toon('#7a4a26'), false); c.scale.setScalar(0.13); c.position.set(px + Math.cos(i*2.1)*0.18, py - 0.12, Math.sin(i*2.1)*0.18); g.add(c); }
+  g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(0, TAU); scene.add(g);
+  solidCircle(x, z, 0.3*s, 3*s);
+}
+// paredão de pedra vermelha em camadas
+function mesa(x, z, s, solid=true){
+  const g = new T.Group(), cols = ['#c8643a', '#e08a52', '#b5532e', '#d9773f'];
+  let y = 0;
+  for (let i = 0; i < 3; i++){ const h = rand(0.7, 1.2)*s, rr = (1.2 - i*0.18)*s; const c = mesh(new T.CylinderGeometry(rr*0.92, rr, h, 7), toon(cols[i % 4])); c.position.y = y + h/2; c.rotation.y = rand(0, TAU); if (!i) outline(c, 1.03); g.add(c); y += h; }
+  g.position.set(x, 0, z); scene.add(g);
+  if (solid) solidCircle(x, z, 1.15*s, y);
+}
+function dryBush(x, z, s){
+  const g = new T.Group(), col = toon(pick(['#a89a5a', '#9a8a4a', '#b5a466']));
+  for (let i = 0; i < 7; i++){ const b = mesh(GY, col, false); b.scale.set(0.035, 0.6*s, 0.035); b.position.y = 0.25*s; b.rotation.set(rand(-0.9, 0.9), 0, rand(-0.9, 0.9)); g.add(b); }
+  const ball = mesh(new T.IcosahedronGeometry(0.32*s, 0), toon('#b5a466')); ball.position.y = 0.3*s; outline(ball, 1.06); g.add(ball);
+  g.position.set(x, 0, z); g.rotation.y = rand(0, TAU); scene.add(g);
+}
+function skull(x, z, s){
+  const g = new T.Group(), bone = toon('#f4ecd8');
+  const h = mesh(GS, bone); h.scale.set(0.32, 0.26, 0.38); h.position.y = 0.22; outline(h, 1.08); g.add(h);
+  for (const sx of [-1, 1]){ const e = mesh(GS, toon('#2a2140'), false); e.scale.setScalar(0.08); e.position.set(sx*0.12, 0.26, 0.31); g.add(e); const hn = mesh(GC, bone); hn.scale.set(0.07, 0.4, 0.07); hn.position.set(sx*0.3, 0.38, 0.05); hn.rotation.z = -sx*1.1; g.add(hn); }
+  g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(0, TAU); scene.add(g);
+}
+// esqueleto gigante deitado na areia
+function bigSkeleton(x, z){
+  const g = new T.Group(), bone = toon('#f4ecd8');
+  const spine = mesh(GY, bone); spine.scale.set(0.22, 9, 0.22); spine.rotation.z = Math.PI/2; spine.position.y = 2.1; outline(spine, 1.06); g.add(spine);
+  for (let i = 0; i < 6; i++){
+    const rr = 2.3 - Math.abs(i - 2)*0.3, rib = mesh(new T.TorusGeometry(rr, 0.16, 6, 14, Math.PI), bone);
+    // meio arco em pé por cima da espinha, de um lado ao outro
+    rib.rotation.y = Math.PI/2; rib.position.set(-3 + i*1.25, 0, 0); rib.scale.set(1, 2.1/rr, 1); outline(rib, 1.06); g.add(rib);
+    for (const sz of [-1, 1]) solidCircle(x - 3 + i*1.25, z + sz*rr, 0.28, 1.5);
+  }
+  const head = mesh(GS, bone); head.scale.set(1.4, 1.0, 1.1); head.position.set(5.6, 1.0, 0); outline(head, 1.05); g.add(head);
+  const jaw = mesh(GB, bone); jaw.scale.set(1.6, 0.3, 0.9); jaw.position.set(6.4, 0.25, 0); outline(jaw, 1.05); g.add(jaw);
+  for (const sz of [-1, 1]){ const e = mesh(GS, toon('#2a2140'), false); e.scale.setScalar(0.3); e.position.set(6.2, 1.25, sz*0.62); g.add(e); }
+  g.position.set(x, 0, z); scene.add(g);
+  solidCircle(x + 5.8, z, 1.3, 2);
+}
+function buildSertao(r){
+  const X = r.cx; r.path = '#d4b070';
+  regionRoad(r, 30);
+  pathStrip(X + 6, 1.5, X + 6, 19, 2.4, r.path);
+  regionTown(r, 'Vila Mandacaru', [
+    {type:'house', x:-30, z:-27, w:3.2, d:2.8, wall:'#f0c89a', roof:'#c8643a', door:1},
+    {type:'house', x:-14, z:-27, w:3.0, d:2.6, wall:'#e8b98a', roof:'#8a5a3b', door:1}],
+    [[-21, -8, '#f28c28'], [-24, -9, '#c8643a']], 'sertao');
+  // Oásis Escondido
+  const OX = X + 8, OZ = 25;
+  pool(OX, OZ, 4, '#4fb0e8', '#d8c78f');
+  ZONES.push({name:'Oásis Escondido', x:OX, z:OZ, r:7.5});
+  for (let i = 0; i < 7; i++){ const a = i/7*TAU + 0.3; if (Math.abs(wrapA(a + Math.PI/2)) < 0.5) continue; palm(OX + Math.cos(a)*5.6, OZ + Math.sin(a)*5.6, rand(0.9, 1.2)); }
+  for (let i = 0; i < 6; i++){ const a = rand(0, TAU), d = rand(0.8, 3.3); const pad = mesh(new T.CircleGeometry(rand(0.25, 0.4), 16, 0.4, TAU - 0.6), lam('#5cb85c'), false); pad.rotation.set(-Math.PI/2, 0, rand(0, TAU)); pad.position.set(OX + Math.cos(a)*d, 0.045, OZ + Math.sin(a)*d); scene.add(pad); }
+  makeNpc(OX + 0.5, OZ - 5.4, '#16a3a3', null, 'sertao', {still:true, rod:true, yaw:0});
+  // Paredões Vermelhos
+  ZONES.push({name:'Paredões Vermelhos', x:X + 27, z:-27, r:7});
+  for (const [lx, lz, s] of [[24, -23, 1.6], [30, -26, 2.0], [26, -31, 1.4], [32, -32, 1.7], [21, -29, 1.1]]) mesa(X + lx, lz, s);
+  // Cemitério de Ossos
+  ZONES.push({name:'Cemitério de Ossos', x:X + 25, z:28, r:8});
+  bigSkeleton(X + 22, 28);
+  for (let i = 0; i < 6; i++) skull(X + 25 + rand(-6, 6), 28 + rand(-4, 4), rand(0.8, 1.3));
+  sign(X - 33, 3.2, ['Sertão Rachado', 'Oásis e Ossos ↘']);
+  sign(X + 3.2, 3.2, ['Oásis Escondido', 'tem sombra']);
+  biomePatch(r, {x:-4, z:-17, r:6, lv:[8, 11], pool:['javali', 'raposa', 'canguru'], name:'Capim Seco'}, ['#c9b06a', '#b89a55', '#d4bd78'], '#c9a868');
+  biomePatch(r, {x:-8, z:16, r:6, lv:[9, 12], pool:['raposa', 'lobo', 'javali', 'macaco'], name:'Mato do Cacto'}, ['#9aa55a', '#b0aa60', '#8a9a4a'], '#b5a066');
+  biomePatch(r, {x:14, z:-10, r:6.5, lv:[10, 13], pool:['canguru', 'guepardo', 'rinoceronte'], name:'Dunas Quentes'}, ['#d4bd78', '#c9b06a', '#e0c888'], '#d2b47a');
+  biomePatch(r, {x:22, z:10, r:5.5, lv:[11, 14], pool:['guepardo', 'macaco', 'coruja', 'canguru'], name:'Beira do Oásis'}, ['#8fbf5a', '#9aa55a', '#a8b866'], '#b0a868');
+  edgeRing(r, (x, z) => Math.random() < 0.55 ? mesa(x, z, rand(1.2, 1.8), false) : cactus(x, z, rand(1.0, 1.4), false));
+  scatter(r, 45, 0, (x, z) => cactus(x, z, rand(0.7, 1.2)));
+  scatter(r, 14, 0, (x, z) => boulder(x, z, rand(0.5, 1.0), ['#c9a878', '#b8946a', '#d4b088']));
+  scatter(r, 6, 1, (x, z) => mesa(x, z, rand(0.8, 1.2)));
+  scatter(r, 35, -0.5, (x, z) => dryBush(x, z, rand(0.8, 1.3)));
+  scatter(r, 10, -0.5, (x, z) => skull(x, z, rand(0.7, 1.1)));
+  // manchas de terra rachada
+  for (let i = 0; i < 70; i++){ const x = X + rand(-MAP, MAP), z = rand(-MAP, MAP); if (!freeAt(x, z, -2)) continue; const b = gdisc(x, z, 1, pick(['#dcbc7a', '#d4b070', '#eed49a']), 0.008); b.scale.set(rand(0.8, 2.6), rand(0.6, 1.8), 1); b.rotation.z = rand(0, TAU); }
+  speckle(r, 700, ['#c9b06a', '#b89a55'], ['#c9a878', '#b8946a', '#e0c898']);
+}
+
+/* ---------- Mapa 2: Pico Congelado ---------- */
+function snowPine(x, z, s, solid=true){
+  const g = new T.Group(), crown = new T.Group(); g.add(crown);
+  const tr = mesh(new T.CylinderGeometry(0.2, 0.28, 1.2, 6), toon('#7a4a26')); tr.position.y = 0.6; g.add(tr);
+  const green = toon(pick(['#2f6d4a', '#2b6343', '#357a52'])), snow = toon('#ffffff');
+  for (let i = 0; i < 3; i++){
+    const k = 1.2 - i*0.3, c = mesh(new T.ConeGeometry(1, 1.3, 7), green); c.position.y = 1.4 + i*0.75; c.scale.set(k, 1, k); if (!i) outline(c, 1.05); crown.add(c);
+    const cap = mesh(new T.ConeGeometry(1, 0.7, 7), snow, false); cap.position.y = 1.4 + i*0.75 + 0.32; cap.scale.set(k*0.66, 1, k*0.66); crown.add(cap);
+  }
+  sways.push({c:crown, ph:rand(0, TAU)});
+  g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(0, TAU); scene.add(g);
+  if (solid){ colliders.push({x, z, r:0.55*s}); staticBox(x, 1.5*s, z, 0.3*s, 1.5*s, 0.3*s); }
+}
+function snowman(x, z, s){
+  const g = new T.Group(), snow = toon('#ffffff');
+  [[0.62, 0.55], [0.45, 1.4], [0.33, 2.05]].forEach(([rr, y], i) => { const b = mesh(GS, snow); b.scale.setScalar(rr); b.position.y = y; outline(b, 1.06); g.add(b); if (i === 1) for (let k = 0; k < 3; k++){ const bt = mesh(GS, toon('#2a2140'), false); bt.scale.setScalar(0.05); bt.position.set(0, y + 0.25 - k*0.2, rr*0.97); g.add(bt); } });
+  const nose = mesh(GC, toon('#f28c28')); nose.scale.set(0.07, 0.35, 0.07); nose.rotation.x = Math.PI/2; nose.position.set(0, 2.03, 0.45); g.add(nose);
+  for (const sx of [-1, 1]){ googlyDisc(g, sx*0.13, 2.15, 0.31, sx < 0 ? 0.09 : 0.07, sx*0.25); const arm = mesh(GY, toon('#7a4a26'), false); arm.scale.set(0.03, 0.8, 0.03); arm.position.set(sx*0.72, 1.55, 0); arm.rotation.z = -sx*1.0; g.add(arm); }
+  const scarf = mesh(new T.TorusGeometry(0.3, 0.08, 6, 14), toon(pick(['#d9472b', '#3b64d6', '#2b9a4a']))); scarf.rotation.x = Math.PI/2; scarf.position.y = 1.78; g.add(scarf);
+  const hat = mesh(GY, toon('#2a2140')); hat.scale.set(0.22, 0.35, 0.22); hat.position.y = 2.48; outline(hat, 1.08); g.add(hat);
+  const brim = mesh(GY, toon('#2a2140'), false); brim.scale.set(0.34, 0.04, 0.34); brim.position.y = 2.32; g.add(brim);
+  g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(-0.6, 0.6); scene.add(g);
+  solidCircle(x, z, 0.6*s, 2.2*s);
+}
+function igloo(x, z, ry){
+  const g = new T.Group(), ice = toon('#f2f8fc');
+  const dome = mesh(new T.SphereGeometry(1.7, 16, 10, 0, TAU, 0, Math.PI/2), ice); outline(dome, 1.03); g.add(dome);
+  for (let i = 1; i < 4; i++){ const ln = mesh(new T.TorusGeometry(1.7*Math.cos(i*0.38), 0.025, 4, 24), toon('#c9dcea'), false); ln.rotation.x = Math.PI/2; ln.position.y = 1.7*Math.sin(i*0.38); g.add(ln); }
+  const tunnel = mesh(new T.CylinderGeometry(0.75, 0.75, 1.2, 12, 1, false, 0, Math.PI), ice); tunnel.rotation.set(Math.PI/2, Math.PI/2, 0); tunnel.rotation.order = 'YXZ'; tunnel.position.set(0, 0, 1.75); outline(tunnel, 1.04); g.add(tunnel);
+  const door = mesh(new T.CircleGeometry(0.5, 12, 0, Math.PI), toon('#2a3a4a'), false); door.position.set(0, 0, 2.36); g.add(door);
+  g.position.set(x, 0, z); g.rotation.y = ry; scene.add(g);
+  solidCircle(x, z, 1.75, 1.7);
+}
+function iceCrystal(x, z, s){
+  const g = new T.Group(), mat = toon(pick(['#a8e2ff', '#bfeaff', '#9fd4f2']));
+  for (let i = 0; i < 3; i++){ const c = mesh(new T.OctahedronGeometry(1, 0), mat); c.scale.set(0.3, rand(0.8, 1.3), 0.3); c.position.set(rand(-0.3, 0.3), 0.6, rand(-0.3, 0.3)); c.rotation.set(rand(-0.4, 0.4), rand(0, TAU), rand(-0.4, 0.4)); outline(c, 1.07); g.add(c); }
+  g.position.set(x, 0, z); g.scale.setScalar(s); scene.add(g);
+  solidCircle(x, z, 0.55*s, 1.4*s);
+}
+function snowMound(x, z, s){ const m = mesh(GS, toon('#f7fbff'), false); m.scale.set(1.4*s, 0.3*s, 1.0*s); m.position.set(x, 0, z); m.rotation.y = rand(0, TAU); scene.add(m); }
+function buildPico(r){
+  const X = r.cx; r.path = '#c9d6e0';
+  regionRoad(r, 28);
+  pathStrip(X + 8, 1.5, X + 8, 15, 2.4, r.path);
+  regionTown(r, 'Refúgio do Pico', [
+    {type:'house', x:-30, z:-27, w:3.2, d:2.8, wall:'#8a5a3b', roof:'#f4f8fb', door:1},
+    {type:'house', x:-14, z:-27, w:3.0, d:2.6, wall:'#9a6a45', roof:'#e8f0f6', door:1}],
+    [[-21, -8, '#3b64d6'], [-24, -9, '#ffffff']], 'gelo');
+  // Lago Congelado: dá pra andar (e lutar) em cima do gelo
+  const LX = X + 9, LZ = 22;
+  gdisc(LX, LZ, 6.4, '#9fd4ec', 0.02); gdisc(LX, LZ, 6.0, '#c9ecfa', 0.022);
+  for (let i = 0; i < 7; i++){ const len = rand(1.2, 3), c = mesh(GB, lam('#e8f8ff'), false); c.scale.set(0.05, 0.01, len); c.position.set(LX + rand(-4, 4), 0.025, LZ + rand(-4, 4)); c.rotation.y = rand(0, TAU); scene.add(c); }
+  ZONES.push({name:'Lago Congelado', x:LX, z:LZ, r:7.5, bare:6.6});
+  makeNpc(LX + 3, LZ - 2, '#7cc7ff', {x:LX, z:LZ, r:4}, 'gelo');
+  // Vila dos Iglus
+  ZONES.push({name:'Vila dos Iglus', x:X + 24, z:24, r:7});
+  igloo(X + 21, 22, 0.98); igloo(X + 27, 21, -0.79); igloo(X + 25, 27.5, -2.86);
+  snowman(X + 20.5, 26.5, 1.0);
+  makeNpc(X + 24, 24, '#d9472b', {x:X + 24, z:24, r:1.5}, 'gelo');
+  // Cume Gelado: a montanha no canto
+  {
+    const g = new T.Group();
+    const rock = mesh(new T.ConeGeometry(9, 10, 9), toon('#9aa6b0')); rock.position.y = 5; outline(rock, 1.02); g.add(rock);
+    const cap = mesh(new T.ConeGeometry(4.6, 5.1, 9), toon('#ffffff')); cap.position.y = 7.55; g.add(cap);
+    const flag = mesh(GB, toon('#d9472b'), false); flag.scale.set(0.6, 0.35, 0.03); flag.position.set(0.32, 10.6, 0); g.add(flag);
+    const pole = mesh(GY, toon('#2a2140'), false); pole.scale.set(0.03, 1.2, 0.03); pole.position.y = 10.4; g.add(pole);
+    g.position.set(X + 28, 0, -28); scene.add(g);
+    solidCircle(X + 28, -28, 8, 8);
+    ZONES.push({name:'Cume Gelado', x:X + 28, z:-28, r:11});
+  }
+  sign(X - 33, 3.2, ['Pico Congelado', 'Lago e Iglus ↘']);
+  biomePatch(r, {x:-4, z:-18, r:6, lv:[13, 16], pool:['lobo', 'raposa', 'coruja'], name:'Neve Fofa'}, ['#9fb8a0', '#b5c9b8', '#8aa890'], '#dfe9ee');
+  biomePatch(r, {x:-10, z:16, r:6, lv:[14, 17], pool:['urso', 'lobo', 'coruja'], name:'Pinheiral'}, ['#5f8a6a', '#6f9a78', '#4f7a5a'], '#d2dfe4');
+  biomePatch(r, {x:13, z:-9, r:6, lv:[15, 18], pool:['urso', 'gorila', 'lobo', 'raposa'], name:'Encosta do Vento'}, ['#9fb8a0', '#8aa890', '#a8c4b0'], '#dbe6ec');
+  biomePatch(r, {x:29, z:8, r:5.5, lv:[16, 19], pool:['gorila', 'urso', 'coruja', 'guepardo'], name:'Vale Branco'}, ['#b5c9b8', '#9fb8a0'], '#e4eef3');
+  edgeRing(r, (x, z) => snowPine(x, z, rand(1.1, 1.5), false));
+  scatter(r, 60, 0, (x, z) => snowPine(x, z, rand(0.8, 1.3)));
+  scatter(r, 14, 0, (x, z) => iceCrystal(x, z, rand(0.8, 1.3)));
+  scatter(r, 6, 0.5, (x, z) => snowman(x, z, rand(0.8, 1.1)));
+  scatter(r, 16, 0, (x, z) => boulder(x, z, rand(0.5, 1.0), ['#9aa6b0', '#8a96a0', '#aab4bc'], '#ffffff'));
+  scatter(r, 30, -0.8, (x, z) => snowMound(x, z, rand(0.7, 1.4)));
+  speckle(r, 500, ['#9fb8a0', '#8aa890'], ['#8a96a0', '#ffffff', '#c9d6e0']);
+}
+
+/* ---------- Mapa 3: Brejo Lamacento ---------- */
+function deadTree(x, z, s, solid=true, col='#5a4632'){
+  const g = new T.Group(), bark = toon(col);
+  const tr = mesh(new T.CylinderGeometry(0.16, 0.3, 2.6, 6), bark); tr.position.y = 1.3; tr.rotation.z = rand(-0.12, 0.12); outline(tr, 1.06); g.add(tr);
+  for (let i = 0; i < 4; i++){ const a = rand(0, TAU), b = mesh(new T.CylinderGeometry(0.04, 0.09, rand(0.8, 1.3), 5), bark); b.position.set(Math.cos(a)*0.3, rand(1.4, 2.4), Math.sin(a)*0.3); b.rotation.set(Math.sin(a)*0.9, 0, -Math.cos(a)*0.9); g.add(b); }
+  g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(0, TAU); scene.add(g);
+  if (solid){ colliders.push({x, z, r:0.4*s}); staticBox(x, 1.3*s, z, 0.25*s, 1.3*s, 0.25*s); }
+  return g;
+}
+// árvore chorona: copa caída com cipós pendurados
+function willow(x, z, s, solid=true){
+  const g = new T.Group(), crown = new T.Group(); g.add(crown);
+  const tr = mesh(new T.CylinderGeometry(0.25, 0.38, 2.2, 7), toon('#5a4632')); tr.position.y = 1.1; g.add(tr);
+  const col = toon(pick(['#4f7a3a', '#5b8a42', '#46703a']));
+  const top = mesh(GS, col); top.scale.set(1.6, 0.9, 1.6); top.position.y = 2.6; outline(top, 1.04); crown.add(top);
+  const vineG = new T.CylinderGeometry(0.035, 0.02, 1, 4);
+  for (let i = 0; i < 14; i++){ const a = rand(0, TAU), d = rand(1.0, 1.5), l = rand(0.8, 1.6), v = mesh(vineG, col, false); v.scale.y = l; v.position.set(Math.cos(a)*d, 2.3 - l/2, Math.sin(a)*d); crown.add(v); }
+  sways.push({c:crown, ph:rand(0, TAU)});
+  g.position.set(x, 0, z); g.scale.setScalar(s); g.rotation.y = rand(0, TAU); scene.add(g);
+  if (solid){ colliders.push({x, z, r:0.5*s}); staticBox(x, 1.5*s, z, 0.3*s, 1.5*s, 0.3*s); }
+}
+function cattails(x, z, n){
+  const g = new T.Group();
+  for (let i = 0; i < n; i++){
+    const h = rand(0.8, 1.4), px = rand(-0.5, 0.5), pz = rand(-0.5, 0.5);
+    const st = mesh(GY, toon('#5b7a3a'), false); st.scale.set(0.025, h, 0.025); st.position.set(px, h/2, pz); st.rotation.set(rand(-0.15, 0.15), 0, rand(-0.15, 0.15)); g.add(st);
+    const hd = mesh(GY, toon('#6b4226'), false); hd.scale.set(0.06, 0.25, 0.06); hd.position.set(px, h, pz); g.add(hd);
+  }
+  g.position.set(x, 0, z); scene.add(g);
+}
+function buildBrejo(r){
+  const X = r.cx; r.path = '#8a7a4a';
+  regionRoad(r, 30);
+  // passarela de tábuas até a Árvore Anciã
+  pathStrip(X - 10, 1.5, X - 25, 21, 2.2, '#a8784a');
+  regionTown(r, 'Palafitas', [
+    {type:'house', x:-30, z:-27, w:3.2, d:2.8, wall:'#a8b87a', roof:'#5a4632', door:1},
+    {type:'house', x:-14, z:-27, w:3.0, d:2.6, wall:'#c9b87a', roof:'#46703a', door:1}],
+    [[-21, -8, '#5b8a42'], [-24, -9, '#8e44ad']], 'brejo');
+  // lagoas de lama com vitórias-régias e taboas
+  for (const [lx, lz, rr, name] of [[8, 21, 5, 'Lagoa Turva'], [21, -19, 4], [27, 21, 3.6], [-4, -27, 3]]){
+    const x = X + lx;
+    pool(x, lz, rr, '#4b6b3a', '#5a4a32');
+    if (name) ZONES.push({name, x, z:lz, r:rr + 2.5});
+    for (let i = 0; i < Math.round(rr*1.6); i++){ const a = rand(0, TAU), d = rand(0.6, rr - 0.5); const pad = mesh(new T.CircleGeometry(rand(0.25, 0.42), 16, 0.4, TAU - 0.6), lam('#6fae4f'), false); pad.rotation.set(-Math.PI/2, 0, rand(0, TAU)); pad.position.set(x + Math.cos(a)*d, 0.045, lz + Math.sin(a)*d); scene.add(pad); if (Math.random() < 0.35){ const fl = mesh(GS, toon('#ffffff'), false); fl.scale.set(0.1, 0.08, 0.1); fl.position.set(pad.position.x, 0.1, pad.position.z); scene.add(fl); } }
+    for (let i = 0; i < 6; i++){ const a = rand(0, TAU); cattails(x + Math.cos(a)*(rr + 0.6), lz + Math.sin(a)*(rr + 0.6), 4); }
+  }
+  makeNpc(X + 8.5, 21 - 6.1, '#5b8a42', null, 'brejo', {still:true, rod:true, yaw:0});
+  // Árvore Anciã: tronco enorme com olhos
+  {
+    const g = new T.Group(), bark = toon('#5a4632');
+    const tr = mesh(new T.CylinderGeometry(1.4, 2.0, 5, 9), bark); tr.position.y = 2.5; outline(tr, 1.03); g.add(tr);
+    const crown = mesh(GS, toon('#46703a')); crown.scale.set(4.2, 2.4, 4.2); crown.position.y = 6.2; outline(crown, 1.03); g.add(crown);
+    for (let i = 0; i < 6; i++){ const a = i/6*TAU, rt = mesh(GC, bark); rt.scale.set(0.5, 1.6, 0.5); rt.position.set(Math.cos(a)*1.9, 0.4, Math.sin(a)*1.9); rt.rotation.set(Math.sin(a)*1.1, 0, -Math.cos(a)*1.1); g.add(rt); }
+    for (const sx of [-1, 1]) googlyDisc(g, sx*0.55, 3.2, 1.62, sx < 0 ? 0.4 : 0.32, sx*0.3);
+    const mouth = mesh(GS, toon('#2a1a12'), false); mouth.scale.set(0.5, 0.25, 0.2); mouth.position.set(0, 2.3, 1.6); g.add(mouth);
+    g.position.set(X - 27, 0, 25); g.rotation.y = 0.6; scene.add(g);
+    solidCircle(X - 27, 25, 2.1, 5);
+    ZONES.push({name:'Árvore Anciã', x:X - 27, z:25, r:7});
+  }
+  sign(X - 33, 3.2, ['Brejo Lamacento', 'Árvore Anciã ↗']);
+  biomePatch(r, {x:-4, z:-15, r:6, lv:[17, 20], pool:['javali', 'macaco', 'coruja'], name:'Lodo'}, ['#4f6b33', '#5b7a3a', '#3f5a2a'], '#5a7a3a');
+  biomePatch(r, {x:6, z:9, r:5.5, lv:[18, 21], pool:['coruja', 'macaco', 'lobo', 'gorila'], name:'Brejo Fundo'}, ['#3f5a2a', '#4f6b33', '#5b7a3a'], '#4f6b33');
+  biomePatch(r, {x:12, z:-9, r:5.5, lv:[19, 22], pool:['gorila', 'rinoceronte', 'javali'], name:'Taboal'}, ['#6b7a3a', '#5b7a3a', '#7a8a4a'], '#5f7a40');
+  biomePatch(r, {x:31, z:5, r:5, lv:[20, 23], pool:['rinoceronte', 'gorila', 'urso', 'coruja'], name:'Charco Bravo'}, ['#3f5a2a', '#4f6b33'], '#4a6332');
+  edgeRing(r, (x, z) => Math.random() < 0.5 ? willow(x, z, rand(1.1, 1.4), false) : deadTree(x, z, rand(1.1, 1.5), false));
+  scatter(r, 30, 0, (x, z) => deadTree(x, z, rand(0.8, 1.3)));
+  scatter(r, 28, 0, (x, z) => willow(x, z, rand(0.8, 1.2)));
+  scatter(r, 30, -0.6, (x, z) => mushroom(x, z, rand(0.6, 1.6), Math.random() < 0.2));
+  scatter(r, 25, -0.6, (x, z) => cattails(x, z, 5));
+  scatter(r, 10, 0, (x, z) => boulder(x, z, rand(0.5, 0.9), ['#6a6a5a', '#5a5a4a'], '#5f9e4a'));
+  for (let i = 0; i < 60; i++){ const x = X + rand(-MAP, MAP), z = rand(-MAP, MAP); if (!freeAt(x, z, -2)) continue; const b = gdisc(x, z, 1, pick(['#5f7a40', '#7a6a42', '#647f45']), 0.008); b.scale.set(rand(0.8, 2.6), rand(0.6, 1.8), 1); b.rotation.z = rand(0, TAU); }
+  speckle(r, 1100, ['#4f6b33', '#5b7a3a', '#6b8a42'], ['#6a6a5a', '#7a6a50']);
+}
+
+/* ---------- Mapa 4: Cratera Brava ---------- */
+function basalt(x, z, s, solid=true){
+  const g = new T.Group();
+  for (let i = 0; i < 6; i++){ const h = rand(0.8, 2.4)*s, c = mesh(new T.CylinderGeometry(0.3*s, 0.3*s, h, 6), toon(pick(['#3d3638', '#4a4244', '#353032']))); c.position.set(rand(-0.5, 0.5)*s, h/2, rand(-0.5, 0.5)*s); if (i < 2) outline(c, 1.05); g.add(c); }
+  g.position.set(x, 0, z); g.rotation.y = rand(0, TAU); scene.add(g);
+  if (solid) solidCircle(x, z, 0.85*s, 2*s);
+}
+function obsidian(x, z, s){
+  const c = mesh(new T.OctahedronGeometry(1, 0), toon(pick(['#2e2440', '#3a2f52', '#261d36']))); c.scale.set(0.5*s, 1.5*s, 0.5*s); c.position.set(x, 1.0*s, z); c.rotation.set(rand(-0.2, 0.2), rand(0, TAU), rand(-0.2, 0.2)); outline(c, 1.06); scene.add(c);
+  solidCircle(x, z, 0.5*s, 2*s);
+}
+function charredTree(x, z, s, solid=true){
+  const g = deadTree(x, z, s, solid, '#2a2224');
+  for (let i = 0; i < 3; i++){ const e = mesh(GS, emberMat, false); e.scale.setScalar(0.06); e.position.set(rand(-0.2, 0.2), rand(0.4, 2.0), 0.24); g.add(e); }
+}
+function vent(x, z){
+  const g = new T.Group();
+  for (let i = 0; i < 7; i++){ const a = i/7*TAU, s = mesh(new T.DodecahedronGeometry(0.22, 0), toon('#3d3638')); s.position.set(Math.cos(a)*0.45, 0.1, Math.sin(a)*0.45); g.add(s); }
+  const hole = mesh(new T.CircleGeometry(0.35, 12), lavaMat, false); hole.rotation.x = -Math.PI/2; hole.position.y = 0.04; g.add(hole);
+  g.position.set(x, 0, z); scene.add(g);
+  chimneySmoke(x, 0.2, z); colliders.push({x, z, r:0.6});
+}
+function buildCratera(r){
+  const X = r.cx; r.path = '#7a6a60';
+  regionRoad(r, 22);
+  pathStrip(X + 2, 1.5, X + 2, 12, 2.4, r.path);
+  regionTown(r, 'Base da Cratera', [
+    {type:'house', x:-30, z:-27, w:3.2, d:2.8, wall:'#9a8a80', roof:'#d9472b', door:1},
+    {type:'house', x:-14, z:-27, w:3.0, d:2.6, wall:'#b5a69a', roof:'#2a2224', door:1}],
+    [[-21, -8, '#d9472b'], [-24, -9, '#2a2224']], 'vulcao');
+  // Vulcão Pancadão no canto, com lava escorrendo
+  {
+    const VX = X + 25, VZ = -25, g = new T.Group();
+    const cone = mesh(new T.CylinderGeometry(2.4, 11, 8, 14), toon('#4a3c3a')); cone.position.y = 4; outline(cone, 1.02); g.add(cone);
+    const top = mesh(new T.CircleGeometry(2.2, 16), lavaMat, false); top.rotation.x = -Math.PI/2; top.position.y = 8.02; g.add(top);
+    for (let i = 0; i < 4; i++){
+      const a = i/4*TAU + 0.6, arm = new T.Group(); arm.rotation.y = a; g.add(arm);
+      const st = mesh(GB, lavaMat, false); st.scale.set(0.55, 11.8, 0.08); st.position.set(0, 4, 6.85); st.rotation.x = -Math.atan2(8.6, 8); arm.add(st);
+    }
+    g.position.set(VX, 0, VZ); scene.add(g);
+    for (let i = 0; i < 3; i++) chimneySmoke(VX + rand(-0.8, 0.8), 8.2, VZ + rand(-0.8, 0.8));
+    solidCircle(VX, VZ, 9.6, 8);
+    ZONES.push({name:'Vulcão Pancadão', x:VX, z:VZ, r:13});
+  }
+  // poças de lava (ninguém entra)
+  for (const [lx, lz, rr, name] of [[6, -25, 4, 'Poço de Lava'], [26, 20, 3.4], [-7, 25, 3], [31, 29, 2.6]]){
+    pool(X + lx, lz, rr, null, '#2a2224', lavaMat);
+    if (name) ZONES.push({name, x:X + lx, z:lz, r:rr + 2.5});
+    for (let i = 0; i < 5; i++){ const a = rand(0, TAU), b = mesh(GS, emberMat, false); b.scale.set(0.18, 0.08, 0.18); b.position.set(X + lx + Math.cos(a)*rand(0, rr - 0.5), 0.06, lz + Math.sin(a)*rand(0, rr - 0.5)); scene.add(b); }
+  }
+  // Campo de Obsidiana
+  ZONES.push({name:'Campo de Obsidiana', x:X + 4, z:24, r:6});
+  for (let i = 0; i < 9; i++){ const a = rand(0, TAU), d = rand(1, 5); obsidian(X + 4 + Math.cos(a)*d, 24 + Math.sin(a)*d, rand(0.7, 1.3)); }
+  makeNpc(X + 2, 14, '#ff5a36', {x:X + 2, z:14.5, r:1.5}, 'vulcao');
+  sign(X - 33, 3.2, ['Cratera Brava', 'cuidado: lava!']);
+  biomePatch(r, {x:-4, z:-15, r:6, lv:[22, 25], pool:['lobo', 'javali', 'guepardo'], name:'Cinzas'}, ['#7a6a5a', '#6a5a4a', '#8a7a6a'], '#6a5c56');
+  biomePatch(r, {x:-10, z:14, r:6, lv:[23, 26], pool:['urso', 'gorila', 'lobo'], name:'Capim Queimado'}, ['#8a6a3a', '#7a5a2a', '#9a7a4a'], '#665648');
+  biomePatch(r, {x:13, z:-7, r:5.5, lv:[24, 27], pool:['rinoceronte', 'guepardo', 'gorila'], name:'Rocha Quente'}, ['#7a6a5a', '#8a5a3a'], '#6e5a52');
+  biomePatch(r, {x:31, z:2, r:5, lv:[25, 28], pool:['rinoceronte', 'gorila', 'urso', 'guepardo', 'lobo'], name:'Boca do Vulcão'}, ['#8a5a3a', '#9a6a3a', '#6a4a2a'], '#5a4a44');
+  edgeRing(r, (x, z) => Math.random() < 0.6 ? basalt(x, z, rand(1.1, 1.6), false) : charredTree(x, z, rand(1.1, 1.4), false));
+  scatter(r, 28, 0, (x, z) => charredTree(x, z, rand(0.8, 1.3)));
+  scatter(r, 12, 0.5, (x, z) => basalt(x, z, rand(0.7, 1.1)));
+  scatter(r, 12, 0, (x, z) => obsidian(x, z, rand(0.6, 1.1)));
+  scatter(r, 22, 0, (x, z) => boulder(x, z, rand(0.5, 1.0), ['#4a4244', '#3d3638', '#5a5052']));
+  scatter(r, 8, 0.5, (x, z) => vent(x, z));
+  for (let i = 0; i < 60; i++){ const x = X + rand(-MAP, MAP), z = rand(-MAP, MAP); if (!freeAt(x, z, -2)) continue; const b = gdisc(x, z, 1, pick(['#4a3e3a', '#6a5a54', '#3d3436']), 0.008); b.scale.set(rand(0.8, 2.6), rand(0.6, 1.8), 1); b.rotation.z = rand(0, TAU); }
+  speckle(r, 450, ['#7a6a3a', '#6a5a4a'], ['#3a3234', '#4a4244', '#5a5052']);
+  // brasinhas soltas no chão
+  const glow = [];
+  for (let i = 0; i < 90; i++){ const x = X + rand(-MAP + 2, MAP - 2), z = rand(-MAP + 2, MAP - 2); if (!nearPath(x, z, 0.3)) glow.push({x, y:0.03, z, s:rand(0.05, 0.1), sy:0.03, ry:rand(0, TAU)}); }
+  instanced(new T.DodecahedronGeometry(1, 0), emberMat, glow);
+}
+
+const REGION_BUILDERS = [null, buildSertao, buildPico, buildBrejo, buildCratera];
+for (const r of REGIONS.slice(1)) buildRegion(r, () => { PORTALS.filter(p => p.region === r.id).forEach(buildPortal); REGION_BUILDERS[r.id](r); });
+
+// troca de mapa: só o mapa atual fica visível e com física; bichos selvagens dos outros somem
+let curRegion = null;
+function applyRegion(r){
+  curRegion = r;
+  for (const g of REGIONS){
+    const on = g === r;
+    g.root.visible = on;
+    if (g.active === on) continue;
+    g.active = on;
+    for (const b of g.bodies){ if (on) world.addBody(b); else world.remove(b); }
+  }
+  SKY.set(r.sky); hemi.color.set(r.hemi[0]); hemi.groundColor.set(r.hemi[1]);
+  ambFx.visible = !!r.fx; if (r.fx) ambFx.material.color.set(AMB_FX[r.fx].c);
+  for (const w of wilds()) if (w.patch.region !== r.id) destroyCreature(w);
+  cam.target.set(trainer.pos.x, 0.5, trainer.pos.z);
+  currentArea = null;
+  const el = $('area'); el.textContent = r.name; el.classList.add('show');
+  clearTimeout(areaTimer); areaTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+function travel(p){
+  const to = REGIONS[p.to], a = portalArrival(p.b.region, p.to);
+  mode = 'menu'; setPrompt('');
+  $('fade').style.opacity = 1;
+  setTimeout(() => {
+    trainer.pos.set(a.x, 0, a.z); trainer.yaw = a.ry; trainer.moving = false;
+    applyRegion(to);
+    if (follower && !follower.removed) showTeleport(follower, a.x - Math.sin(a.ry)*1.6, a.z - Math.cos(a.ry)*1.6);
+    game.map = to.id; save();
+    for (const q of PATCHES) if (q.region === to.id){ let n = creatures.filter(c => c.patch === q).length; for (let i = 0; i < 6 && n < PER_PATCH; i++) if (spawnWild(q, false)) n++; }
+    mode = 'world'; setHud();
+    $('fade').style.opacity = 0;
+    toast(`Você chegou em ${to.name}! (${to.lv})`);
+  }, 500);
+}
+// partículas do clima de cada mapa (neve, brasas, vaga-lumes, poeira), sempre em volta da câmera
+const AMB_FX = {snow:{c:'#ffffff', s:0.07}, embers:{c:'#ffb347', s:0.05}, fireflies:{c:'#e8ff7a', s:0.05}, dust:{c:'#e8d3a0', s:0.04}};
+const AMB_N = 160, ambSeed = Array.from({length:AMB_N}, () => ({x:rand(0, 36), z:rand(0, 36), y:rand(0, 1), ph:rand(0, TAU), sp:rand(0.6, 1.4)}));
+const ambFx = new T.InstancedMesh(new T.IcosahedronGeometry(1, 0), new T.MeshBasicMaterial({color:'#ffffff'}), AMB_N);
+ambFx.frustumCulled = false; ambFx.visible = false; scene.add(ambFx);
+const _amb = new T.Object3D(), wrap36 = v => ((v % 36) + 36) % 36 - 18;
+function renderRegionFx(t){
+  for (const f of portalFx){ f.rings[0].rotation.z = t*2.2; f.rings[1].rotation.z = -t*3.1; f.gem.rotation.y = t*1.5; f.gem.position.y = 4.15 + Math.sin(t*2)*0.08; f.swirl.material.opacity = 0.6 + Math.sin(t*3)*0.12; }
+  lavaMat.color.setHSL(0.05 + Math.sin(t*1.7)*0.02, 1, 0.52 + Math.sin(t*2.3)*0.06);
+  if (!ambFx.visible || !curRegion) return;
+  const kind = curRegion.fx, base = AMB_FX[kind].s, cx = cam.target.x, cz = cam.target.z;
+  ambSeed.forEach((p, i) => {
+    let x = p.x, z = p.z, y, s = base;
+    if (kind === 'snow'){ y = 9 - ((t*0.9*p.sp + p.y*9) % 9); x += Math.sin(t*0.7 + p.ph)*0.8 + t*0.4; }
+    else if (kind === 'embers'){ y = (t*0.8*p.sp + p.y*6) % 6; x += Math.sin(t*1.3 + p.ph)*0.5; s *= 0.6 + Math.sin(t*9 + p.ph)*0.4; }
+    else if (kind === 'fireflies'){ y = 0.5 + p.y*1.6 + Math.sin(t*1.1 + p.ph)*0.3; x += Math.sin(t*0.4*p.sp + p.ph)*1.5; z += Math.cos(t*0.3*p.sp + p.ph)*1.5; s *= Math.max(0, Math.sin(t*2*p.sp + p.ph)); }
+    else { y = 0.15 + p.y*1.2; x += t*3*p.sp; z += Math.sin(t + p.ph)*0.5; }
+    _amb.position.set(cx + wrap36(x - cx), y, cz + wrap36(z - cz)); _amb.scale.setScalar(Math.max(0.001, s)); _amb.updateMatrix(); ambFx.setMatrixAt(i, _amb.matrix);
+  });
+  ambFx.instanceMatrix.needsUpdate = true;
+}
 // ponto livre pra um morador (ignora o próprio colisor dele)
 function npcFree(n, x, z, rad){
-  if (Math.abs(x) > MAP - 1.5 || Math.abs(z) > MAP - 1.5) return false;
+  if (!inRegion(x, z, regionAt(x), 1.5)) return false;
   for (const c of colliders) if (c !== n.col && Math.hypot(x - c.x, z - c.z) < c.r + rad) return false;
   for (const r of rects) if (Math.abs(x - r.x) < r.hw + rad && Math.abs(z - r.z) < r.hd + rad) return false;
   return true;
@@ -1106,6 +1689,7 @@ function renderAmbient(){
     f.scale.set(1 + Math.sin(t*17 + i)*0.12, 1 + Math.sin(t*23 + i)*0.22, 1 + Math.cos(t*19 + i)*0.12);
     f.rotation.y = t*2;
   });
+  renderRegionFx(t);
 }
 let currentArea = null, areaTimer = null;
 function updateArea(){
@@ -1329,10 +1913,10 @@ function makeCreature(member, x, z, role){
   const sp = SPECIES[member.species];
   const st = stats(member);
   const s = sp.size*(1 + 0.012*(member.level - 1));
-  const slot = slotFree.shift(); const bit = 16 << slot; const mask = ALL & ~bit;
+  const slot = creatureSeq++;   // só serve pra defasar animações entre animais
   const m = 1 + (st.str - 10)*0.02;
   const mk = (shape, mass, px, py, pz) => {
-    const b = new C.Body({mass:mass*m, shape, position:new C.Vec3(px, py, pz), material:bodyMat, linearDamping:0.05, angularDamping:0.35, collisionFilterGroup:bit, collisionFilterMask:mask});
+    const b = new C.Body({mass:mass*m, shape, position:new C.Vec3(px, py, pz), material:bodyMat, linearDamping:0.05, angularDamping:0.35, collisionFilterGroup:G_CREATURE, collisionFilterMask:ALL});
     world.addBody(b); return b;
   };
   const P = (a, pa, b, pb) => new C.PointToPointConstraint(a, new C.Vec3(...pa), b, new C.Vec3(...pb), 1e4);
@@ -1378,7 +1962,7 @@ function makeCreature(member, x, z, role){
   }
   joints.forEach(j => world.addConstraint(j));
   const c = {
-    member, sp, st, s, d, H, plan:sp.plan, role, slot, bit, parts, joints, torso, head, arms, legs, grabbers, strikers, reach,
+    member, sp, st, s, d, H, plan:sp.plan, role, slot, parts, joints, torso, head, arms, legs, grabbers, strikers, reach,
     power:st.power, defense:st.defense,
     yaw: rand(0, TAU), grounded:false, ko:0, stun:0, wobble:0, confused:0, fainted:false, removed:false, dead:false,
     punchT:[0,0], punchSide:0, biteT:0, atkCd:0, attackT:0, hitCd:0, envCd:0, thrownT:0, thrownBy:null,
@@ -1432,7 +2016,7 @@ function showCreature(c, x, y, z){
 function destroyCreature(c){
   hideCreature(c);
   c.meshes.forEach(m => scene.remove(m));
-  slotFree.push(c.slot); c.dead = true;
+  c.dead = true;
   creatures = creatures.filter(o => o !== c);
 }
 function syncCreature(c){
@@ -1696,7 +2280,8 @@ function throwRock(c, target){
   const sx = c.head.position.x + f.x*0.4, sy = c.head.position.y + 0.2, sz = c.head.position.z + f.z*0.4;
   const tx = target.x, ty = (target.y || 0.5) + 0.2, tz = target.z;
   const tf = clamp(Math.hypot(tx - sx, tz - sz)/12, 0.3, 0.9);
-  const b = new C.Body({mass:0.4, shape:new C.Sphere(0.15), material:bodyMat, position:new C.Vec3(sx, sy, sz), collisionFilterGroup:G_BALL, collisionFilterMask:ALL & ~c.bit & ~G_TRAINER & ~G_BALL});
+  const b = new C.Body({mass:0.4, shape:new C.Sphere(0.15), material:bodyMat, position:new C.Vec3(sx, sy, sz), collisionFilterGroup:G_BALL, collisionFilterMask:ALL & ~G_TRAINER & ~G_BALL});
+  b.ignore = c;
   b.velocity.set((tx - sx)/tf, (ty - sy + 0.5*GRAV*tf*tf)/tf, (tz - sz)/tf);
   b.isRock = true; b.thrower = c; b.spent = false; b.born = clock;
   b.addEventListener('collide', e => onCollide(b, e.body));
@@ -1965,7 +2550,7 @@ function spawnFollower(){
 // Cada área de mato mantém PER_PATCH animais; quando falta um, outro sai do mato depois de alguns segundos
 const PER_PATCH = 2;
 function spawnWild(p, popOut){
-  if (slotFree.length < 3) return false;
+  if (creatures.length > MAX_CREATURES - 3) return false;
   for (let tries = 0; tries < 12; tries++){
     const a = rand(0, TAU), d = Math.sqrt(Math.random())*(p.r - 1);
     const x = p.x + Math.cos(a)*d, z = p.z + Math.sin(a)*d;
@@ -1981,6 +2566,7 @@ function spawnWild(p, popOut){
 const wilds = () => creatures.filter(c => c.role === 'wild');
 function updateSpawns(dt){
   for (const p of PATCHES){
+    if (p.region !== curRegion.id) continue;
     p.timer = (p.timer || 0) - dt;
     const n = creatures.filter(c => c.patch === p && (c.role === 'wild' || c.role === 'enemy')).length;
     if (n < PER_PATCH && p.timer <= 0){ if (spawnWild(p, true)) p.timer = rand(5, 9); else p.timer = 1; }
@@ -2130,7 +2716,9 @@ function finishBattle(){
 function blackout(){
   $('fade').style.opacity = 1;
   setTimeout(() => {
-    healAll(); trainer.pos.set(HEAL_SPOT.x, 0, HEAL_SPOT.z + 1.5); trainer.yaw = 0;
+    // corre pro Centro de Cura mais perto, na frente do tapete
+    const h = nearestSpot('heal', trainer.pos.x, trainer.pos.z), p = rotPt(h.b, 0, h.lz + 1.5);
+    healAll(); trainer.pos.set(p.x, 0, p.z); trainer.yaw = h.b.ry || 0;
     spawnFollower(); setHud();
     $('fade').style.opacity = 0;
     toast('Todos desmaiaram... Você correu pro Centro de Cura.');
@@ -2160,11 +2748,11 @@ function throwBall(target){
   const sx = trainer.pos.x + f.x*0.4, sy = 1.7, sz = trainer.pos.z + f.z*0.4;
   const tx = target.x, ty = (target.y || 0) + 0.7, tz = target.z;
   const d = Math.hypot(tx - sx, tz - sz), tf = clamp(d/10, 0.4, 1.1);
-  const mask = ALL & ~G_TRAINER & ~G_BALL & ~battle.mon.bit;
+  const mask = ALL & ~G_TRAINER & ~G_BALL;
   const ball = new C.Body({mass:0.3, shape:new C.Sphere(0.17), material:bodyMat, position:new C.Vec3(sx, sy, sz), collisionFilterGroup:G_BALL, collisionFilterMask:mask, linearDamping:0.1});
   ball.velocity.set((tx - sx)/tf, (ty - sy + 0.5*GRAV*tf*tf)/tf, (tz - sz)/tf);
   ball.angularVelocity.set(rand(-8,8), 0, rand(-8,8));
-  ball.isBall = true; ball.used = false; ball.born = clock; ball.item = itemKey;
+  ball.isBall = true; ball.used = false; ball.born = clock; ball.item = itemKey; ball.ignore = battle.mon;
   ball.addEventListener('collide', e => onCollide(ball, e.body));
   world.addBody(ball);
   const m = makeItemMesh(itemKey); m.scale.setScalar(1.15); scene.add(m);
@@ -2328,12 +2916,12 @@ function updateRemotes(){
       r = {peer:p.peer, model:makeTrainerModel(peerColor(p.peer)), tag, x:pr.x, z:pr.z, yaw:+pr.y || 0, walk:0, pet:null, petKey:''};
       net.remotes.set(p.peer, r);
     }
-    r.p = p; r.tx = clamp(pr.x, -MAP, MAP); r.tz = clamp(pr.z, -MAP, MAP); r.tyaw = +pr.y || 0; r.mv = !!pr.mv; r.st = pr.st;
+    r.p = p; r.tx = clamp(pr.x, -MAP, REGIONS.at(-1).cx + MAP); r.tz = clamp(pr.z, -MAP, MAP); r.tyaw = +pr.y || 0; r.mv = !!pr.mv; r.st = pr.st;
     const sp = SPECIES[pr.sp] ? pr.sp : null, lv = clamp(pr.lv|0, 1, 100);
     const key = r.st === 'w' && sp ? sp + ':' + lv : '';
     if (key !== r.petKey){
       if (r.pet){ destroyCreature(r.pet); r.pet = null; }
-      if (key && slotFree.length > 4) r.pet = makeCreature(newMember(sp, lv), r.x - 1, r.z - 1, 'remote');
+      if (key && creatures.length < MAX_CREATURES - 4) r.pet = makeCreature(newMember(sp, lv), r.x - 1, r.z - 1, 'remote');
       r.petKey = r.pet ? key : '';
     }
   }
@@ -2346,6 +2934,8 @@ function updateRemotes(){
 function removeRemote(r){ scene.remove(r.model.g); r.tag.remove(); if (r.pet) destroyCreature(r.pet); net.remotes.delete(r.peer); }
 function renderRemotes(){
   for (const r of net.remotes.values()){
+    // amigo que trocou de mapa: pula direto em vez de deslizar pelo vazio
+    if (Math.hypot(r.tx - r.x, r.tz - r.z) > 20){ r.x = r.tx; r.z = r.tz; if (r.pet && !r.pet.removed) showTeleport(r.pet, r.x - 1, r.z - 1); }
     r.x += (r.tx - r.x)*0.2; r.z += (r.tz - r.z)*0.2; r.yaw = lerpAngle(r.yaw, r.tyaw, 0.2);
     r.model.g.position.set(r.x, 0, r.z); r.model.g.rotation.y = r.yaw;
     r.moving = r.mv;
@@ -2588,20 +3178,23 @@ let clock = 0;
 function step(dt){
   clock += dt;
   trainer.throwT -= dt;
+  // qualquer teleporte (portal, desmaio, duelo) cai aqui e troca o mapa ativo
+  const rg = regionAt(trainer.pos.x); if (rg !== curRegion) applyRegion(rg);
   if (mode === 'world'){
     const v = moveInput();
     trainer.moving = v.lengthSq() > 0.01;
     if (trainer.moving){ moveTrainer(v.x*5.5*dt, v.z*5.5*dt); trainer.yaw = lerpAngle(trainer.yaw, Math.atan2(v.x, v.z), 0.25); }
     if (follower && !follower.removed) aiFollow(follower);
     for (const w of wilds()) if (!w.removed) aiWander(w, dt);
-    const nearHeal = Math.hypot(trainer.pos.x - HEAL_SPOT.x, trainer.pos.z - HEAL_SPOT.z) < 1.6;
-    const nearShop = Math.hypot(trainer.pos.x - SHOP_SPOT.x, trainer.pos.z - SHOP_SPOT.z) < 1.5;
-    const nearBox = Math.hypot(trainer.pos.x - BOX_SPOT.x, trainer.pos.z - BOX_SPOT.z) < 1.3;
+    const spot = SPOTS.find(s => Math.hypot(trainer.pos.x - s.x, trainer.pos.z - s.z) < s.r);
     const np = net.room ? netWorldStep() : null;
-    if (np) setPrompt(np.text, np.key); else setPrompt(nearHeal ? 'E: curar seu time' : nearShop ? 'E: entrar na loja' : nearBox ? 'E: abrir a Caixa de Animais' : '', 'KeyE');
-    if (nearHeal && pressed.KeyE){ healAll(); toast('Seu time foi curado!'); }
-    if (nearShop && pressed.KeyE) showShop();
-    if (nearBox && pressed.KeyE) showBox();
+    if (np) setPrompt(np.text, np.key); else setPrompt(spot ? (spot.kind === 'portal' ? `E: viajar para ${REGIONS[spot.to].name}` : SPOT_TEXT[spot.kind]) : '', 'KeyE');
+    if (spot && pressed.KeyE){
+      if (spot.kind === 'portal'){ travel(spot); for (const k in pressed) delete pressed[k]; return; }
+      if (spot.kind === 'heal'){ healAll(); toast('Seu time foi curado!'); }
+      else if (spot.kind === 'shop') showShop();
+      else if (spot.kind === 'box') showBox();
+    }
     if (pressed.KeyZ) showBag();
     if (pressed.KeyC) cycleCapture();
     for (let i = 1; i <= TEAM_MAX; i++) if (pressed['Digit' + i]) switchTo(i - 1);
@@ -2777,7 +3370,7 @@ function setHud(){
     ? 'DUELO · <kbd>WASD</kbd> mover · <kbd>Q</kbd>/clique ataque · <kbd>E</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>F</kbd> especial · <kbd>X</kbd> desistir'
     : inBattle
     ? '<kbd>WASD</kbd> mover · <kbd>Q</kbd>/clique ataque · <kbd>E</kbd> segurar agarra/morde (+<kbd>Espaço</kbd> levanta) · <kbd>F</kbd> especial · <kbd>R</kbd>/botão direito arremessa captura · <kbd>C</kbd> troca captura · <kbd>Z</kbd> mochila · <kbd>1</kbd>-<kbd>5</kbd> trocar · <kbd>X</kbd> fugir'
-    : '<kbd>WASD</kbd> andar · chegue perto de um animal no mato alto pra batalhar · <kbd>Z</kbd> mochila · <kbd>Tab</kbd> time · <kbd>E</kbd> no tapete do Centro, da Caixa ou da Loja' + (net.room ? ' · <kbd>F</kbd> perto de um amigo: desafiar pra duelo' : '');
+    : '<kbd>WASD</kbd> andar · chegue perto de um animal no mato alto pra batalhar · <kbd>Z</kbd> mochila · <kbd>Tab</kbd> time · <kbd>E</kbd> no tapete do Centro, da Caixa, da Loja ou de um portal' + (net.room ? ' · <kbd>F</kbd> perto de um amigo: desafiar pra duelo' : '');
   teamKey = ''; wildKey = ''; $('wild').dataset.key = ''; $('me').dataset.key = ''; renderTeam();
 }
 let promptText = null, promptKey = null;
@@ -2814,7 +3407,7 @@ function showTitle(){
       <div><kbd>WASD</kbd> andar / mover o animal</div><div><kbd>Q</kbd> ou clique: soco ou mordida</div>
       <div><kbd>E</kbd> segurar: agarrar ou morder e segurar</div><div><kbd>Espaço</kbd> pular, ou levantar quem você pegou</div>
       <div><kbd>F</kbd> golpe especial do animal</div><div><kbd>R</kbd> ou botão direito: arremessar bolota na mira</div>
-      <div><kbd>Z</kbd> mochila · <kbd>C</kbd> troca captura · <kbd>X</kbd> fugir</div><div><kbd>E</kbd> no tapete: loja, Centro de Cura e Caixa de Animais</div>
+      <div><kbd>Z</kbd> mochila · <kbd>C</kbd> troca captura · <kbd>X</kbd> fugir</div><div><kbd>E</kbd> no tapete: loja, Centro de Cura, Caixa de Animais e portais pros 5 mapas</div>
     </div>`;
   $('card').querySelectorAll('[data-starter]').forEach(b => b.onclick = () => {
     game = {team:[newMember(b.dataset.starter, 5)], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota'};
@@ -2966,12 +3559,20 @@ $('bagBtn').onclick = () => { if (mode === 'world' || mode === 'battle') showBag
 function enterWorld(){
   $('overlay').hidden = true; mode = 'world';
   if (!game.team.some(m => m.hp > 0)) healAll();
+  // volta pro mapa salvo (na frente do portal de chegada); os Campos começam perto do Centro
+  const want = REGIONS[game.map | 0] || REGIONS[0];
+  if (regionAt(trainer.pos.x) !== want){
+    if (want.id){ const a = portalArrival(0, want.id); trainer.pos.set(a.x, 0, a.z); trainer.yaw = a.ry; }
+    else { trainer.pos.set(0, 0, -11); trainer.yaw = Math.PI; }
+  }
+  applyRegion(want);
   spawnFollower(); setHud();
-  for (const p of PATCHES){ let n = creatures.filter(c => c.patch === p).length; for (let i = 0; i < 6 && n < PER_PATCH; i++) if (spawnWild(p, false)) n++; }
+  for (const p of PATCHES){ if (p.region !== want.id) continue; let n = creatures.filter(c => c.patch === p).length; for (let i = 0; i < 6 && n < PER_PATCH; i++) if (spawnWild(p, false)) n++; }
 }
 
 /* ================= Início ================= */
 resize();
+applyRegion(REGIONS[0]);
 let last = performance.now(), acc = 0;
 function frame(now){
   acc += Math.min(100, now - last); last = now;
