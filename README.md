@@ -26,8 +26,8 @@ Todos os comandos ficam em volta do WASD, na mão esquerda.
 | `X` | Fugir da batalha / desistir do duelo |
 | `Z` | Mochila |
 | `Tab` | Ver o time |
-| `1`–`6` | Trocar de animal |
-| `E` (no mapa) | Usar o Centro de Cura ou a Loja (no tapete) |
+| `1`–`5` | Trocar de animal |
+| `E` (no mapa) | Usar o Centro de Cura, a Caixa de Animais ou a Loja (no tapete) |
 | `F` / `E` / `X` (no mapa) | Desafiar um amigo / aceitar / recusar |
 
 No celular aparecem botões na tela.
@@ -53,6 +53,7 @@ No celular aparecem botões na tela.
   - Raposa: Truque da Raposa
 - **Captura com frutos e sementes:** Bolota, Pinha (1,5x), Coco (2,2x) e Semente Dourada (garantida).
 - **Loja do Mato e mochila:** itens de cura (Fruta Silvestre, Pote de Mel, Cesta de Frutas, Erva Reanimadora) e de captura, comprados com moedas ganhas nas batalhas.
+- **Time de até 5 animais e Caixa de Animais:** capturas com o time cheio vão pra caixa, um terminal ao lado do Centro de Cura onde você guarda e pega animais. Quem é guardado descansa e volta curado.
 - **Mapa:** áreas de mato alto com níveis diferentes. Cada área mantém 2 animais e repõe quem foi capturado ou derrotado.
 
 ## Multiplayer
