@@ -449,31 +449,93 @@ const POND = {x:-12, z:25, r:4.5};
 })();
 
 /* ================= Treinador ================= */
-const trainer = {pos:new T.Vector3(0, 0, -11), yaw:Math.PI, walk:0, moving:false, throwT:0};
-const trLegG = new T.CylinderGeometry(0.11, 0.1, 0.6, 8); trLegG.translate(0, -0.3, 0);
-const trArmG = new T.CylinderGeometry(0.08, 0.07, 0.55, 8); trArmG.translate(0, -0.27, 0);
+const trainer = {pos:new T.Vector3(0, 0, -11), yaw:Math.PI, walk:0, moving:false, throwT:0, cheerT:0};
+const trLegG = new T.CylinderGeometry(0.09, 0.08, 0.5, 8); trLegG.translate(0, -0.25, 0);
+const trArmG = new T.CylinderGeometry(0.065, 0.055, 0.5, 8); trArmG.translate(0, -0.25, 0);
+// Treinador "bonequinho": cabeção, olhões soltos, boné de hélice torto, braços de macarrão
 function makeTrainerModel(jacket){
-  const g = new T.Group();
-  const skin = toon('#f2c49b'), red = toon(jacket), blue = toon('#2f4f9e'), dark = toon('#2a2140');
-  const legs = [-1, 1].map(s => { const l = mesh(trLegG, blue); l.position.set(s*0.14, 0.62, 0); g.add(l); return l; });
-  const body = outline(mesh(new T.CylinderGeometry(0.26, 0.3, 0.7, 10), red), 1.07); body.position.y = 0.95; g.add(body);
-  const pack = outline(mesh(new T.BoxGeometry(0.38, 0.45, 0.2), toon('#f2b632')), 1.08); pack.position.set(0, 1.0, -0.27); g.add(pack);
-  const arms = [-1, 1].map(s => { const a = mesh(trArmG, red); a.position.set(s*0.34, 1.25, 0); g.add(a); return a; });
-  const head = outline(mesh(new T.SphereGeometry(0.33, 16, 12), skin), 1.07); head.position.y = 1.58; g.add(head);
-  const cap = mesh(new T.SphereGeometry(0.34, 16, 8, 0, TAU, 0, Math.PI/2), red); cap.position.y = 1.62; g.add(cap);
-  const brim = outline(mesh(new T.BoxGeometry(0.46, 0.04, 0.34), red), 1.1); brim.position.set(0.05, 1.64, 0.3); brim.rotation.y = 0.25; g.add(brim);
-  const nose = mesh(new T.SphereGeometry(0.07, 8, 6), toon('#f0a77f'), false); nose.position.set(0, 1.52, 0.33); g.add(nose);
-  for (const s of [-1, 1]){
-    const e = outline(mesh(new T.SphereGeometry(0.1, 12, 8), toon('#ffffff'), false), 1.12); e.position.set(s*0.12, 1.62, 0.25); e.scale.z = 0.8; g.add(e);
-    const p = mesh(new T.SphereGeometry(s < 0 ? 0.05 : 0.04, 8, 6), dark, false); p.position.set(s*0.12 + s*0.02, 1.6 - (s < 0 ? 0.02 : 0), 0.33); g.add(p);
+  const g = new T.Group(), body = new T.Group(); g.add(body);
+  const skin = toon('#f7c9a3'), cloth = toon(jacket), pants = toon('#3a5bb8'), ink = toon('#16131c'), white = toon('#ffffff');
+  const sph = (parent, mat, p, s, out) => { const m = mesh(GS, mat, !!out); m.position.set(p[0], p[1], p[2]); m.scale.set(s[0], s[1], s[2]); if (out) outline(m, out); parent.add(m); return m; };
+  const legs = [-1, 1].map(s => {
+    const l = mesh(trLegG, pants); l.position.set(s*0.12, 0.5, 0); g.add(l);
+    sph(l, toon('#f4f4f4'), [0, -0.5, 0.06], [0.11, 0.07, 0.17], 1.12);
+    return l;
+  });
+  sph(body, cloth, [0, 0.78, 0], [0.29, 0.33, 0.25], 1.08);
+  sph(body, white, [0, 0.74, 0.2], [0.13, 0.17, 0.07]);
+  const pack = sph(body, toon('#f2b632'), [0, 0.84, -0.26], [0.21, 0.25, 0.13], 1.1);
+  const arms = [-1, 1].map(s => {
+    const a = mesh(trArmG, cloth); a.position.set(s*0.3, 0.98, 0); body.add(a);
+    sph(a, skin, [0, -0.52, 0], [0.085, 0.085, 0.085], 1.15);
+    return a;
+  });
+  const neck = new T.Group(); neck.position.set(0, 1.06, 0); body.add(neck);
+  const head = sph(neck, skin, [0, 0.36, 0], [0.42, 0.4, 0.4], 1.06);
+  // rosto (coordenadas da esfera unitária da cabeça)
+  for (const sx of [-1, 1]) sph(head, skin, [sx*0.98, 0.0, -0.05], [0.18, 0.26, 0.12]);
+  sph(head, toon('#f29a7a'), [0.04, -0.24, 0.96], [0.2, 0.17, 0.17], 1.12);
+  for (const [x, y] of [[-0.46, -0.38], [-0.36, -0.44], [0.42, -0.4], [0.52, -0.34]]) sph(head, toon('#c8805a'), [x, y, 0.86], [0.035, 0.035, 0.02]);
+  const mouth = sph(head, toon('#5a1a24'), [0.08, -0.55, 0.8], [0.3, 0.13, 0.12]); mouth.rotation.z = 0.18;
+  const tongue = sph(head, toon('#ff7b93'), [0.14, -0.67, 0.8], [0.13, 0.17, 0.07]); tongue.visible = false;
+  const pupils = [];
+  for (const sx of [-1, 1]){
+    const R = sx < 0 ? 0.31 : 0.26, cx = sx*0.36, cy = 0.04, cz = 0.8;
+    sph(head, white, [cx, cy, cz], [R, R, R*0.8], 1.12);
+    const pr = R*(sx < 0 ? 0.5 : 0.42);
+    const pm = sph(head, ink, [cx, cy, cz + R*0.8], [pr, pr, pr*0.45]);
+    sph(pm, white, [0.35, 0.35, 0.8], [0.28, 0.28, 0.3]);
+    pupils.push({m:pm, cx, cy, cz, Rx:R, Rz:R*0.8, lim:R - pr*0.85, ux:0, uy:0, vx:0, vy:0, k:rand(24, 50), dmp:rand(2.5, 5), gk:rand(10, 16)});
   }
-  const grin = mesh(new T.SphereGeometry(0.09, 10, 6), toon('#5a1a24'), false); grin.position.set(0.03, 1.43, 0.29); grin.scale.set(1, 0.35, 0.4); grin.rotation.z = 0.15; g.add(grin);
+  for (const [x, z, rz] of [[-0.75, -0.3, 0.9], [0.75, -0.35, -0.9], [-0.3, -0.85, 0.3]]){ const h = mesh(GC, toon('#7a4a26'), false); h.position.set(x, 0.35, z); h.scale.set(0.12, 0.35, 0.12); h.rotation.set(-0.6, 0, rz); head.add(h); }
+  // boné de hélice, meio torto
+  const cap = new T.Group(); cap.position.set(0, 0.5, -0.12); cap.rotation.set(-0.38, 0, 0.18); head.add(cap);
+  const dome = mesh(new T.SphereGeometry(1, 16, 8, 0, TAU, 0, Math.PI/2), cloth); dome.scale.set(0.98, 0.62, 0.98); outline(dome, 1.06); cap.add(dome);
+  const brim = mesh(GS, cloth); brim.position.set(0.3, 0.02, 0.8); brim.scale.set(0.6, 0.06, 0.5); brim.rotation.y = 0.5; outline(brim, 1.15); cap.add(brim);
+  const stalk = mesh(GY, toon('#f2b632'), false); stalk.position.y = 0.88; stalk.scale.set(0.05, 0.25, 0.05); cap.add(stalk);
+  const prop = new T.Group(); prop.position.y = 1.02; cap.add(prop);
+  for (const [a, col] of [[0, '#3b64d6'], [Math.PI, '#d9472b'], [Math.PI/2, '#2b9a4a'], [-Math.PI/2, '#f2b632']]){
+    const b = mesh(GS, toon(col), false); b.position.set(Math.cos(a)*0.32, 0, Math.sin(a)*0.32); b.scale.set(0.3, 0.03, 0.1); b.rotation.y = -a; prop.add(b);
+  }
   scene.add(g);
-  return {g, legs, arms};
+  return {g, body, legs, arms, neck, head, pack, prop, mouth, tongue, pupils};
+}
+// anima um treinador (o seu ou o de um amigo); st guarda o estado da animação
+function animateTrainer(m, st, dt){
+  st.t = (st.t || 0) + dt; st.walk = (st.walk || 0) + (st.moving ? dt*15 : 0);
+  st.cheerT = (st.cheerT || 0) - dt; st.hopT = (st.hopT || 0) - dt;
+  st.idleT = st.moving || st.cheerT > 0 ? 0 : (st.idleT || 0) + dt;
+  if (st.idleT > 7){ st.idleT = -rand(2, 6); st.hopT = 0.7; }
+  const s = Math.sin(st.walk), cheer = st.cheerT > 0, hop = st.hopT > 0;
+  let y = st.moving ? Math.abs(s)*0.13 : Math.sin(st.t*2.4)*0.012;
+  if (cheer) y = Math.abs(Math.sin(st.t*9))*0.28;
+  if (hop) y = Math.sin((0.7 - st.hopT)/0.7*Math.PI)*0.35;
+  m.body.position.y = y;
+  const squash = st.moving ? (0.065 - Math.abs(s)*0.13)*0.6 : 0;
+  m.body.scale.set(1 + squash, 1 - squash, 1 + squash);
+  m.body.rotation.z = st.moving ? s*0.13 : Math.sin(st.t*1.2)*0.03;
+  m.body.rotation.x = st.moving ? 0.16 : 0;
+  m.legs[0].rotation.x = st.moving ? s*1.0 : hop ? -0.6 : 0;
+  m.legs[1].rotation.x = st.moving ? -s*1.0 : hop ? 0.4 : 0;
+  m.arms.forEach((a, i) => {
+    const side = i ? 1 : -1;
+    if (cheer || hop){ a.rotation.x = -2.7 + Math.sin(st.t*14 + i*2)*0.35; a.rotation.z = side*(0.5 + Math.sin(st.t*11 + i)*0.3); }
+    else if (i === 1 && st.throwT > 0){ a.rotation.x = -3.4 + (0.6 - st.throwT)*7; a.rotation.z = 0.2; }
+    else if (st.moving){ a.rotation.x = (i ? s : -s)*1.4; a.rotation.z = side*(0.35 + Math.abs(Math.cos(st.walk))*0.6); }
+    else { a.rotation.x = Math.sin(st.t*1.7 + i)*0.08; a.rotation.z = side*0.15; }
+  });
+  m.neck.rotation.z = -m.body.rotation.z*1.6 + (st.moving ? Math.sin(st.walk*2)*0.05 : Math.sin(st.t*0.9)*0.08);
+  m.neck.rotation.x = st.moving ? -0.18 + Math.sin(st.walk*2)*0.08 : 0;
+  m.pack.position.y = 0.84 + (st.moving ? Math.abs(Math.cos(st.walk))*0.05 : 0);
+  m.prop.rotation.y += dt*(st.moving || cheer ? 30 : 5);
+  m.tongue.visible = st.moving || cheer;
+  m.mouth.scale.y = cheer || hop ? 0.22 : 0.13;
+  st.pupils = m.pupils;
+  updatePupils(st, m.head);
 }
 (function buildTrainer(){
   const m = makeTrainerModel('#e8412b');
-  trainer.mesh = m.g; trainer.legs = m.legs; trainer.arms = m.arms;
+  trainer.mesh = m.g; trainer.model = m;
   trainer.body = new C.Body({mass:0, type:C.Body.KINEMATIC, shape:new C.Box(new C.Vec3(0.3, 0.8, 0.3)), collisionFilterGroup:G_TRAINER, collisionFilterMask:ALL & ~G_BALL & ~G_GROUND & ~G_STATIC});
   trainer.body.position.set(trainer.pos.x, 0.8, trainer.pos.z); world.addBody(trainer.body);
 })();
@@ -520,15 +582,15 @@ function makeEyes(head, r, x, y, z, size, iris){
   ko.visible = false; head.add(pupilsG, ko);
   return {eyes:pupilsG, xs:ko, pupils};
 }
-const _tv1 = new T.Vector3(), _tv2 = new T.Vector3(), _tv3 = new T.Vector3(), _tq = new T.Quaternion();
+const _tv1 = new T.Vector3(), _tv2 = new T.Vector3(), _tv3 = new T.Vector3(), _tv4 = new T.Vector3(), _tq = new T.Quaternion();
 function updatePupils(c, head){
-  const dt = 1/60, p = head.position;
+  const dt = 1/60, p = head.getWorldPosition(_tv4);
   if (!c._hp){ c._hp = p.clone(); c._hv = new T.Vector3(); }
   const v = _tv1.copy(p).sub(c._hp).divideScalar(dt);
   const a = _tv2.copy(v).sub(c._hv).divideScalar(dt);
   if (a.lengthSq() > 4e4) a.setLength(200);
   c._hp.copy(p); c._hv.copy(v);
-  _tq.copy(head.quaternion).invert();
+  head.getWorldQuaternion(_tq).invert();
   const g = _tv3.set(0, -1, 0).applyQuaternion(_tq);
   a.applyQuaternion(_tq);
   for (const e of c.pupils){
@@ -1450,6 +1512,7 @@ function finishBattle(){
       else { game.box.push(W.member); log.push(`Time cheio: ${W.member.nick} foi pra caixa.`); }
     }
     const xp = Math.round((r === 'capture' ? 10 : 15) + 10*W.member.level);
+    trainer.cheerT = Math.max(trainer.cheerT, 1.8);
     lead.xp += xp; log.push(`${lead.nick} ganhou ${xp} XP.`);
     levelUp(lead, log);
     const coins = Math.round((r === 'capture' ? 10 : 25) + (r === 'capture' ? 5 : 10)*W.member.level);
@@ -1568,6 +1631,7 @@ function updateCapture(dt){
       cap.done = true; cap.wob = 0;
       sprout(cap.ball);
       burst(bp, 30, ['#ffe066','#ffffff','#8fd27a'], 5);
+      trainer.cheerT = 2.2;
       toast(`Peguei! ${W.member.nick} foi capturado! A ${ITEMS[cap.ball.item].name.toLowerCase()} brotou.`);
       setTimeout(() => { if (cap.ball && balls.includes(cap.ball)) removeBall(cap.ball); }, 1500);
       endBattle('capture');
@@ -1689,9 +1753,8 @@ function renderRemotes(){
   for (const r of net.remotes.values()){
     r.x += (r.tx - r.x)*0.2; r.z += (r.tz - r.z)*0.2; r.yaw = lerpAngle(r.yaw, r.tyaw, 0.2);
     r.model.g.position.set(r.x, 0, r.z); r.model.g.rotation.y = r.yaw;
-    if (r.mv) r.walk += 0.25;
-    const sw = r.mv ? Math.sin(r.walk)*0.6 : 0;
-    r.model.legs[0].rotation.x = sw; r.model.legs[1].rotation.x = -sw; r.model.arms[0].rotation.x = -sw*0.8; r.model.arms[1].rotation.x = sw*0.8;
+    r.moving = r.mv;
+    animateTrainer(r.model, r, 1/60);
     const v = new T.Vector3(r.x, 2.15, r.z).project(camera);
     const label = nameOf(r.p) + (r.st === 'b' ? ' · em batalha' : r.st === 'd' ? ' · em duelo' : '');
     if (r.tag.textContent !== label) r.tag.textContent = label;
@@ -1855,7 +1918,7 @@ function finishDuel(won){
   if (battle) for (const c of [battle.mon, battle.wild, battle.pA, battle.pB]) if (c && !c.dead) destroyCreature(c);
   for (const r of rocks.slice()) removeRock(r);
   battle = null; mode = 'world'; $('big').hidden = true;
-  if (won === true){ game.money += 80; toast('+80 moedas pela vitória no duelo!'); }
+  if (won === true){ trainer.cheerT = 2.5; game.money += 80; toast('+80 moedas pela vitória no duelo!'); }
   else if (won === false){ game.money += 20; toast('+20 moedas por participar do duelo.'); }
   trainer.pos.set(ARENA.x + ARENA.r + 2.5, 0, ARENA.z); trainer.yaw = Math.PI/2;
   save(); spawnFollower(); setHud();
@@ -2027,10 +2090,7 @@ function render(){
   for (const r of rocks){ r.mesh.position.copy(r.body.position); r.mesh.quaternion.copy(r.body.quaternion); }
   const tm = trainer.mesh;
   tm.position.set(trainer.pos.x, 0, trainer.pos.z); tm.rotation.y = trainer.yaw;
-  if (trainer.moving) trainer.walk += 0.25;
-  const sw = trainer.moving ? Math.sin(trainer.walk)*0.6 : 0;
-  trainer.legs[0].rotation.x = sw; trainer.legs[1].rotation.x = -sw;
-  trainer.arms[0].rotation.x = -sw*0.8; trainer.arms[1].rotation.x = trainer.throwT > 0 ? -2.6 + (0.6 - trainer.throwT)*4 : sw*0.8;
+  animateTrainer(trainer.model, trainer, 1/60);
   let tgt, size;
   if (battle){
     const pts = battle.pvp && !battle.host
