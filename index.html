@@ -181,10 +181,35 @@ const SPECIES = {
     base:[9,13,5], grow:[1.6,2.4,0.8], special:'kick', specialName:'Coice Duplo', desc:'Pernas de mola. Pula e chuta com as duas patas.'},
   macaco:{name:'Macaco', attr:'inteligencia', plan:'biped', feat:'monkey', color:'#7a5236', dark:'#432a19', belly:'#e7c7a3', size:0.9, arm:1.3, leg:0.85, head:1.0,
     base:[7,9,14], grow:[1.1,1.5,2.6], special:'throw', specialName:'Pedrada', desc:'Esperto. Ataca de longe jogando pedras.'},
-  coruja:{name:'Coruja', attr:'inteligencia', plan:'biped', feat:'owl', color:'#9a7350', dark:'#5a3f28', belly:'#eadcc4', size:0.9, arm:1.0, leg:0.6, head:1.3,
+  coruja:{name:'Coruja', attr:'inteligencia', plan:'biped', feat:'owl', bird:'#e8a33a', color:'#9a7350', dark:'#5a3f28', belly:'#eadcc4', size:0.9, arm:1.0, leg:0.6, head:1.3,
     base:[6,8,16], grow:[1.0,1.3,3.0], special:'hypno', specialName:'Pio Hipnótico', desc:'Olhar hipnótico. Deixa o inimigo tonto e confuso.'},
   raposa:{name:'Raposa', attr:'inteligencia', plan:'quad', feat:'fox', color:'#e0742c', dark:'#3a1d0b', belly:'#fff3e6', size:0.85, leg:0.95, head:0.95,
-    base:[6,12,13], grow:[1.0,2.0,2.3], special:'blink', specialName:'Truque da Raposa', desc:'Some e aparece atrás do inimigo pra morder.'}
+    base:[6,12,13], grow:[1.0,2.0,2.3], special:'blink', specialName:'Truque da Raposa', desc:'Some e aparece atrás do inimigo pra morder.'},
+  // ---- animais que só aparecem num mapa (region = índice em REGIONS); bird = cor do bico e dos pés das aves; rock = cor do que ele arremessa
+  tatu:{name:'Tatu', region:1, attr:'forca', plan:'quad', feat:'armadillo', color:'#b59a7a', dark:'#6e5a44', belly:'#e8d6bc', size:0.95, leg:0.7, head:0.85,
+    base:[14,6,4], grow:[2.6,1.0,0.7], special:'slam', specialName:'Tatu-Bola', desc:'Vira uma bola de casca, pula e cai rolando em cima.'},
+  calango:{name:'Calango', region:1, attr:'agilidade', plan:'quad', feat:'lizard', color:'#7ab648', dark:'#3f6a24', belly:'#e8e29a', size:0.85, leg:0.75, head:0.85,
+    base:[7,17,5], grow:[1.1,3.0,0.9], special:'blitz', specialName:'Corrida Quente', desc:'Corre de pé no chão quente. Ataca três vezes num piscar.'},
+  carcara:{name:'Carcará', region:1, attr:'inteligencia', plan:'biped', feat:'hawk', bird:'#f2b632', color:'#5a4232', dark:'#2e2018', belly:'#f1e6d0', size:0.95, arm:1.15, leg:0.75, head:1.05,
+    base:[7,10,15], grow:[1.1,1.6,2.8], special:'throw', specialName:'Pedra do Alto', desc:'Pega, mata e come. Joga pedra lá de cima.'},
+  iaque:{name:'Iaque', region:2, attr:'forca', plan:'quad', feat:'yak', color:'#4a3a30', dark:'#2a201a', belly:'#7a6656', size:1.3, leg:0.85, head:1.0,
+    base:[17,5,4], grow:[3.0,0.8,0.7], special:'quake', specialName:'Patada na Neve', desc:'Bolo de pelo com chifre. Bate a pata e o chão treme.'},
+  lebre:{name:'Lebre-da-Neve', region:2, attr:'agilidade', plan:'quad', feat:'hare', color:'#f4f6fa', dark:'#b8c2cc', belly:'#ffffff', size:0.8, leg:1.15, head:1.0,
+    base:[6,16,7], grow:[1.0,2.9,1.1], special:'pounce', specialName:'Salto da Lebre', desc:'Branquinha e rápida. Dá um pulo enorme em cima do inimigo.'},
+  pinguim:{name:'Pinguim', region:2, attr:'inteligencia', plan:'biped', feat:'penguin', bird:'#f28c28', rock:'#ffffff', color:'#22252e', dark:'#14161c', belly:'#ffffff', size:0.9, arm:0.9, leg:0.5, head:0.95,
+    base:[8,7,15], grow:[1.3,1.1,2.8], special:'throw', specialName:'Bola de Neve', desc:'Anda engraçado e mira bem. Joga bola de neve de longe.'},
+  jacare:{name:'Jacaré', region:3, attr:'forca', plan:'quad', feat:'gator', color:'#4f7a3a', dark:'#2f4a22', belly:'#d8d89a', size:1.25, leg:0.6, head:1.05,
+    base:[18,5,3], grow:[3.1,0.8,0.6], special:'dash', specialName:'Bote do Jacaré', desc:'Bocão cheio de dente. Dispara pra frente de boca aberta.'},
+  sapo:{name:'Sapo-Boi', region:3, attr:'agilidade', plan:'biped', feat:'frog', color:'#6fb04a', dark:'#3f7a2a', belly:'#f2e6a0', size:0.9, arm:0.8, leg:0.9, head:1.15,
+    base:[9,15,6], grow:[1.5,2.7,0.9], special:'kick', specialName:'Pulo do Sapo', desc:'Pernas de mola. Pula e chuta com as duas patas de sapo.'},
+  capivara:{name:'Capivara', region:3, attr:'inteligencia', plan:'quad', feat:'capybara', color:'#9a6a42', dark:'#5a3c24', belly:'#c99a6c', size:1.05, leg:0.75, head:1.0,
+    base:[9,7,15], grow:[1.4,1.1,2.8], special:'hypno', specialName:'Calma Contagiante', desc:'Tão tranquila que o inimigo fica tonto só de olhar.'},
+  bufalo:{name:'Búfalo de Lava', region:4, attr:'forca', plan:'quad', feat:'buffalo', color:'#3d2e2c', dark:'#1e1514', belly:'#5a4440', size:1.35, leg:0.95, head:1.05,
+    base:[18,6,4], grow:[3.2,0.9,0.7], special:'slam', specialName:'Pisão Vulcânico', desc:'Chifres em brasa. Pula e cai com o peso de um vulcão.'},
+  salamandra:{name:'Salamandra', region:4, attr:'agilidade', plan:'quad', feat:'salamander', color:'#ff6a1f', dark:'#2a1a1a', belly:'#ffd27a', size:0.85, leg:0.7, head:0.9,
+    base:[7,17,7], grow:[1.1,3.0,1.2], special:'blink', specialName:'Faísca', desc:'Some numa faísca e reaparece atrás do inimigo.'},
+  fenix:{name:'Fênix', region:4, attr:'inteligencia', plan:'biped', feat:'phoenix', bird:'#ffd23f', color:'#e8412b', dark:'#a8241a', belly:'#ffb347', size:0.95, arm:1.25, leg:0.7, head:1.0,
+    base:[7,10,17], grow:[1.1,1.6,3.1], special:'hypno', specialName:'Brilho da Fênix', desc:'Brilha tanto que o inimigo fica zonzo e confuso.'}
 };
 const STARTERS = ['urso','lobo','macaco'];
 function stats(m){
@@ -1094,13 +1119,13 @@ const NPC_SETS = {
   centro:['O Centro de Cura cura tudo. Menos tédio.', 'Dica: a Pinha captura melhor que a Bolota. O Coco melhor ainda.', 'Quer duelar com amigo? Chega perto dele e aperta F!',
     'Cada ponta da estrada tem um portal pra outro mapa. Os bichos de lá são bem mais fortes.'],
   sertao:['Aqui faz tanto calor que o Javali já vem assado. Brincadeira. Ele morde.', 'Esse cacto me abraçou. Eu não pedi.', 'O Guepardo do sertão corre tanto que levanta poeira de ontem.',
-    'Viu o esqueleto gigante? Dizem que era um Canguru que pulou alto demais.', 'Água no oásis é de graça. Sombra é extra.'],
+    'Viu o esqueleto gigante? Dizem que era um Canguru que pulou alto demais.', 'Água no oásis é de graça. Sombra é extra.', 'Tatu, Calango e Carcará só existem aqui no sertão. Pega os três!'],
   gelo:['Meu nariz congelou. Agora é um picolé de nariz.', 'O boneco de neve ali olha pra mim. Sempre.', 'Urso do Pico não hiberna. Ele soca.',
-    'Não corre no lago congelado! ...Tá, pode correr. Mas eu vou rir.', 'Iglu é quentinho por dentro. Mentira, é gelado também.'],
+    'Não corre no lago congelado! ...Tá, pode correr. Mas eu vou rir.', 'Iglu é quentinho por dentro. Mentira, é gelado também.', 'Cuidado com o Pinguim: ele tem a mira melhor que a minha.'],
   brejo:['Bem-vindo ao Brejo! Cuidado onde pisa. E onde senta. E onde respira.', 'Os vaga-lumes daqui brilham mais que o meu futuro.', 'Um Gorila caiu na lama e saiu Gorila de chocolate.',
-    'A Árvore Anciã tem mil anos. Ela não fala, mas julga.', 'Minha casa é de palafita. Quando o Rinoceronte passa, vira pula-pula.'],
+    'A Árvore Anciã tem mil anos. Ela não fala, mas julga.', 'Minha casa é de palafita. Quando o Jacaré passa, vira pula-pula.', 'A Capivara do brejo é tão calma que deixa passarinho morar na cabeça.'],
   vulcao:['O chão é lava! Sério. Ali, ó. Não encosta.', 'Aqui os bichos são nível 28. Eu sou nível 1 e meio.', 'Esquentei meu café na lava. Agora ele é lava também.',
-    'Quem chega na Boca do Vulcão volta com a sobrancelha torrada.', 'Dica: cure seu time antes de ir pro mato. A cratera não perdoa.']
+    'Quem chega na Boca do Vulcão volta com a sobrancelha torrada.', 'Dica: cure seu time antes de ir pro mato. A cratera não perdoa.', 'Dizem que a Fênix só aparece aqui. E que o Búfalo de Lava não gosta de abraço.']
 };
 const npcs = [];
 function makeNpc(x, z, jacket, home, set, opts={}){
@@ -1284,10 +1309,10 @@ function buildSertao(r){
   for (let i = 0; i < 6; i++) skull(X + 25 + rand(-6, 6), 28 + rand(-4, 4), rand(0.8, 1.3));
   sign(X - 33, 3.2, ['Sertão Rachado', 'Oásis e Ossos ↘']);
   sign(X + 3.2, 3.2, ['Oásis Escondido', 'tem sombra']);
-  biomePatch(r, {x:-4, z:-17, r:6, lv:[8, 11], pool:['javali', 'raposa', 'canguru'], name:'Capim Seco'}, ['#c9b06a', '#b89a55', '#d4bd78'], '#c9a868');
-  biomePatch(r, {x:-8, z:16, r:6, lv:[9, 12], pool:['raposa', 'lobo', 'javali', 'macaco'], name:'Mato do Cacto'}, ['#9aa55a', '#b0aa60', '#8a9a4a'], '#b5a066');
-  biomePatch(r, {x:14, z:-10, r:6.5, lv:[10, 13], pool:['canguru', 'guepardo', 'rinoceronte'], name:'Dunas Quentes'}, ['#d4bd78', '#c9b06a', '#e0c888'], '#d2b47a');
-  biomePatch(r, {x:22, z:10, r:5.5, lv:[11, 14], pool:['guepardo', 'macaco', 'coruja', 'canguru'], name:'Beira do Oásis'}, ['#8fbf5a', '#9aa55a', '#a8b866'], '#b0a868');
+  biomePatch(r, {x:-4, z:-17, r:6, lv:[8, 11], pool:['tatu', 'calango', 'tatu', 'javali'], name:'Capim Seco'}, ['#c9b06a', '#b89a55', '#d4bd78'], '#c9a868');
+  biomePatch(r, {x:-8, z:16, r:6, lv:[9, 12], pool:['calango', 'carcara', 'tatu', 'raposa'], name:'Mato do Cacto'}, ['#9aa55a', '#b0aa60', '#8a9a4a'], '#b5a066');
+  biomePatch(r, {x:14, z:-10, r:6.5, lv:[10, 13], pool:['calango', 'tatu', 'carcara', 'guepardo'], name:'Dunas Quentes'}, ['#d4bd78', '#c9b06a', '#e0c888'], '#d2b47a');
+  biomePatch(r, {x:22, z:10, r:5.5, lv:[11, 14], pool:['carcara', 'calango', 'tatu', 'canguru'], name:'Beira do Oásis'}, ['#8fbf5a', '#9aa55a', '#a8b866'], '#b0a868');
   edgeRing(r, (x, z) => Math.random() < 0.55 ? mesa(x, z, rand(1.2, 1.8), false) : cactus(x, z, rand(1.0, 1.4), false));
   scatter(r, 45, 0, (x, z) => cactus(x, z, rand(0.7, 1.2)));
   scatter(r, 14, 0, (x, z) => boulder(x, z, rand(0.5, 1.0), ['#c9a878', '#b8946a', '#d4b088']));
@@ -1370,10 +1395,10 @@ function buildPico(r){
     ZONES.push({name:'Cume Gelado', x:X + 28, z:-28, r:11});
   }
   sign(X - 33, 3.2, ['Pico Congelado', 'Lago e Iglus ↘']);
-  biomePatch(r, {x:-4, z:-18, r:6, lv:[13, 16], pool:['lobo', 'raposa', 'coruja'], name:'Neve Fofa'}, ['#9fb8a0', '#b5c9b8', '#8aa890'], '#dfe9ee');
-  biomePatch(r, {x:-10, z:16, r:6, lv:[14, 17], pool:['urso', 'lobo', 'coruja'], name:'Pinheiral'}, ['#5f8a6a', '#6f9a78', '#4f7a5a'], '#d2dfe4');
-  biomePatch(r, {x:13, z:-9, r:6, lv:[15, 18], pool:['urso', 'gorila', 'lobo', 'raposa'], name:'Encosta do Vento'}, ['#9fb8a0', '#8aa890', '#a8c4b0'], '#dbe6ec');
-  biomePatch(r, {x:29, z:8, r:5.5, lv:[16, 19], pool:['gorila', 'urso', 'coruja', 'guepardo'], name:'Vale Branco'}, ['#b5c9b8', '#9fb8a0'], '#e4eef3');
+  biomePatch(r, {x:-4, z:-18, r:6, lv:[13, 16], pool:['lebre', 'pinguim', 'lebre', 'raposa'], name:'Neve Fofa'}, ['#9fb8a0', '#b5c9b8', '#8aa890'], '#dfe9ee');
+  biomePatch(r, {x:-10, z:16, r:6, lv:[14, 17], pool:['iaque', 'lebre', 'pinguim', 'lobo'], name:'Pinheiral'}, ['#5f8a6a', '#6f9a78', '#4f7a5a'], '#d2dfe4');
+  biomePatch(r, {x:13, z:-9, r:6, lv:[15, 18], pool:['iaque', 'pinguim', 'lebre', 'urso'], name:'Encosta do Vento'}, ['#9fb8a0', '#8aa890', '#a8c4b0'], '#dbe6ec');
+  biomePatch(r, {x:29, z:8, r:5.5, lv:[16, 19], pool:['iaque', 'pinguim', 'lebre', 'iaque'], name:'Vale Branco'}, ['#b5c9b8', '#9fb8a0'], '#e4eef3');
   edgeRing(r, (x, z) => snowPine(x, z, rand(1.1, 1.5), false));
   scatter(r, 60, 0, (x, z) => snowPine(x, z, rand(0.8, 1.3)));
   scatter(r, 14, 0, (x, z) => iceCrystal(x, z, rand(0.8, 1.3)));
@@ -1444,10 +1469,10 @@ function buildBrejo(r){
     ZONES.push({name:'Árvore Anciã', x:X - 27, z:25, r:7});
   }
   sign(X - 33, 3.2, ['Brejo Lamacento', 'Árvore Anciã ↗']);
-  biomePatch(r, {x:-4, z:-15, r:6, lv:[17, 20], pool:['javali', 'macaco', 'coruja'], name:'Lodo'}, ['#4f6b33', '#5b7a3a', '#3f5a2a'], '#5a7a3a');
-  biomePatch(r, {x:6, z:9, r:5.5, lv:[18, 21], pool:['coruja', 'macaco', 'lobo', 'gorila'], name:'Brejo Fundo'}, ['#3f5a2a', '#4f6b33', '#5b7a3a'], '#4f6b33');
-  biomePatch(r, {x:12, z:-9, r:5.5, lv:[19, 22], pool:['gorila', 'rinoceronte', 'javali'], name:'Taboal'}, ['#6b7a3a', '#5b7a3a', '#7a8a4a'], '#5f7a40');
-  biomePatch(r, {x:31, z:5, r:5, lv:[20, 23], pool:['rinoceronte', 'gorila', 'urso', 'coruja'], name:'Charco Bravo'}, ['#3f5a2a', '#4f6b33'], '#4a6332');
+  biomePatch(r, {x:-4, z:-15, r:6, lv:[17, 20], pool:['sapo', 'capivara', 'sapo', 'javali'], name:'Lodo'}, ['#4f6b33', '#5b7a3a', '#3f5a2a'], '#5a7a3a');
+  biomePatch(r, {x:6, z:9, r:5.5, lv:[18, 21], pool:['capivara', 'jacare', 'sapo', 'macaco'], name:'Brejo Fundo'}, ['#3f5a2a', '#4f6b33', '#5b7a3a'], '#4f6b33');
+  biomePatch(r, {x:12, z:-9, r:5.5, lv:[19, 22], pool:['jacare', 'sapo', 'capivara', 'gorila'], name:'Taboal'}, ['#6b7a3a', '#5b7a3a', '#7a8a4a'], '#5f7a40');
+  biomePatch(r, {x:31, z:5, r:5, lv:[20, 23], pool:['jacare', 'capivara', 'jacare', 'sapo'], name:'Charco Bravo'}, ['#3f5a2a', '#4f6b33'], '#4a6332');
   edgeRing(r, (x, z) => Math.random() < 0.5 ? willow(x, z, rand(1.1, 1.4), false) : deadTree(x, z, rand(1.1, 1.5), false));
   scatter(r, 30, 0, (x, z) => deadTree(x, z, rand(0.8, 1.3)));
   scatter(r, 28, 0, (x, z) => willow(x, z, rand(0.8, 1.2)));
@@ -1513,10 +1538,10 @@ function buildCratera(r){
   for (let i = 0; i < 9; i++){ const a = rand(0, TAU), d = rand(1, 5); obsidian(X + 4 + Math.cos(a)*d, 24 + Math.sin(a)*d, rand(0.7, 1.3)); }
   makeNpc(X + 2, 14, '#ff5a36', {x:X + 2, z:14.5, r:1.5}, 'vulcao');
   sign(X - 33, 3.2, ['Cratera Brava', 'cuidado: lava!']);
-  biomePatch(r, {x:-4, z:-15, r:6, lv:[22, 25], pool:['lobo', 'javali', 'guepardo'], name:'Cinzas'}, ['#7a6a5a', '#6a5a4a', '#8a7a6a'], '#6a5c56');
-  biomePatch(r, {x:-10, z:14, r:6, lv:[23, 26], pool:['urso', 'gorila', 'lobo'], name:'Capim Queimado'}, ['#8a6a3a', '#7a5a2a', '#9a7a4a'], '#665648');
-  biomePatch(r, {x:13, z:-7, r:5.5, lv:[24, 27], pool:['rinoceronte', 'guepardo', 'gorila'], name:'Rocha Quente'}, ['#7a6a5a', '#8a5a3a'], '#6e5a52');
-  biomePatch(r, {x:31, z:2, r:5, lv:[25, 28], pool:['rinoceronte', 'gorila', 'urso', 'guepardo', 'lobo'], name:'Boca do Vulcão'}, ['#8a5a3a', '#9a6a3a', '#6a4a2a'], '#5a4a44');
+  biomePatch(r, {x:-4, z:-15, r:6, lv:[22, 25], pool:['salamandra', 'fenix', 'salamandra', 'lobo'], name:'Cinzas'}, ['#7a6a5a', '#6a5a4a', '#8a7a6a'], '#6a5c56');
+  biomePatch(r, {x:-10, z:14, r:6, lv:[23, 26], pool:['bufalo', 'salamandra', 'fenix', 'gorila'], name:'Capim Queimado'}, ['#8a6a3a', '#7a5a2a', '#9a7a4a'], '#665648');
+  biomePatch(r, {x:13, z:-7, r:5.5, lv:[24, 27], pool:['bufalo', 'fenix', 'salamandra', 'rinoceronte'], name:'Rocha Quente'}, ['#7a6a5a', '#8a5a3a'], '#6e5a52');
+  biomePatch(r, {x:31, z:2, r:5, lv:[25, 28], pool:['bufalo', 'fenix', 'salamandra', 'bufalo'], name:'Boca do Vulcão'}, ['#8a5a3a', '#9a6a3a', '#6a4a2a'], '#5a4a44');
   edgeRing(r, (x, z) => Math.random() < 0.6 ? basalt(x, z, rand(1.1, 1.6), false) : charredTree(x, z, rand(1.1, 1.4), false));
   scatter(r, 28, 0, (x, z) => charredTree(x, z, rand(0.8, 1.3)));
   scatter(r, 12, 0.5, (x, z) => basalt(x, z, rand(0.7, 1.1)));
@@ -1713,6 +1738,7 @@ function add(parent, geo, mat, p, s, r, shadow=false){
 }
 // Olhos esbugalhados: brancos grandes com pupilas soltas que balançam com o movimento (ver updatePupils)
 const GTOR = new T.TorusGeometry(1, 0.13, 6, 20);
+const GBAND = new T.TorusGeometry(1, 0.07, 5, 16, Math.PI);   // meio anel: faixas da casca do tatu e chifres curvos
 function makeEyes(head, r, x, y, z, size, iris){
   const pupilsG = new T.Group(), ko = new T.Group();
   const ink = toon('#16131c'), white = toon('#ffffff');
@@ -1865,17 +1891,134 @@ function makeCreatureMeshes(c){
       add(tail, GS, light, [0, -d.th*0.75, -d.tl*1.3], [d.tw*0.35, d.tw*0.35, d.tw*0.45], [-0.4, 0, 0]);
       eyeCfg = [0.38, 0.22, 0.75, 0.09, '#f2b632'];
       break;
+    // ---- animais únicos dos mapas novos
+    case 'armadillo':
+      add(head, GS, dark, [0, 0.38*r, -0.05*r], [0.8*r, 0.42*r, 0.85*r], null, true);
+      add(head, GC, body, [0, -0.18*r, 0.95*r], [0.24*r, 0.8*r, 0.24*r], [Math.PI/2, 0, 0], true);
+      add(head, GS, black, [0, -0.18*r, 1.38*r], [0.09*r, 0.08*r, 0.06*r]);
+      for (const sx of [-1, 1]) add(head, GC, body, [sx*0.42*r, 0.72*r, -0.25*r], [0.14*r, 0.38*r, 0.1*r], [-0.2, 0, -sx*0.3], true);
+      // casca de faixas por cima do corpo
+      add(torso, GS, dark, [0, d.th*0.25, 0], [d.tw*1.28, d.th*1.15, d.tl*1.2]);
+      for (let i = 0; i < 6; i++) add(torso, GBAND, light, [0, d.th*0.2, d.tl*(-0.85 + i*0.34)], [d.tw*1.32, d.th*1.22, 0.5*s]);
+      tail = tailGroup(0, d.th*0.1, -d.tl*1.05);
+      add(tail, GC, dark, [0, -0.02, -d.tl*0.45], [d.tw*0.28, d.tl*0.9, d.tw*0.28], [-Math.PI/2 - 0.3, 0, 0], true);
+      eyeCfg = [0.4, 0.2, 0.75, 0.09];
+      break;
+    case 'lizard':
+    case 'salamander':
+      add(head, GS, body, [0, -0.12*r, 0.7*r], [0.62*r, 0.36*r, 0.75*r], null, true);
+      add(head, GS, light, [0, -0.3*r, 0.75*r], [0.5*r, 0.15*r, 0.6*r]);
+      tail = tailGroup(0, 0, -d.tl*1.0);
+      add(tail, GC, body, [0, -d.th*0.15, -d.tl*0.95], [d.tw*0.5, d.tl*2.0, d.tw*0.32], [-Math.PI/2 - 0.12, 0, 0], true);
+      if (sp.feat === 'lizard'){
+        for (let i = 0; i < 6; i++) add(torso, GC, dark, [0, d.th*1.18, d.tl*(0.75 - i*0.3)], [0.045*s, 0.12*s, 0.045*s], [-0.3, 0, 0]);
+        add(head, GC, toon('#d9472b'), [0, -0.38*r, 0.35*r], [0.28*r, 0.4*r, 0.08*r], [Math.PI, 0, 0]);
+      }
+      // manchinhas (pretas no calango, de brasa na salamandra)
+      for (let i = 0; i < 14; i++){
+        const u = rand(-0.85, 0.85), a = rand(-1.5, 1.5), k = Math.sqrt(1 - u*u)*1.02;
+        add(torso, GS, sp.feat === 'salamander' ? emberMat : dark, [Math.sin(a)*d.tw*1.2*k, Math.cos(a)*d.th*1.25*k, u*d.tl*1.15], [0.05*s, 0.05*s, 0.05*s]);
+      }
+      eyeCfg = [0.45, 0.32, 0.6, 0.11, sp.feat === 'lizard' ? '#f2c230' : '#ffd27a'];
+      break;
+    case 'hawk':
+    case 'phoenix':
+      add(head, GS, light, [0, -0.1*r, 0.45*r], [0.7*r, 0.65*r, 0.55*r]);
+      add(head, GC, toon(sp.bird), [0, -0.12*r, 1.05*r], [0.13*r, 0.38*r, 0.13*r], [1.95, 0, 0], true);
+      add(head, GS, toon(sp.bird), [0, -0.3*r, 1.15*r], [0.06*r, 0.08*r, 0.06*r]);
+      if (sp.feat === 'hawk') add(head, GS, black, [0, 0.55*r, -0.05*r], [0.8*r, 0.4*r, 0.85*r], null, true);
+      else for (let i = 0; i < 4; i++) add(head, GC, i % 2 ? emberMat : toon('#ffd23f'), [0, 1.05*r, (0.25 - i*0.3)*r], [0.16*r, 0.75*r, 0.16*r], [-0.3 - i*0.3, 0, 0], true);
+      tail = tailGroup(0, -d.th*0.6, -d.td*0.9);
+      for (const a of [-0.35, 0, 0.35]) add(tail, GC, sp.feat === 'phoenix' && !a ? emberMat : dark, [a*0.12, -d.th*0.25, -d.th*0.5], [d.tw*0.2, d.th*(sp.feat === 'phoenix' ? 2.2 : 1.4), d.tw*0.08], [-2.4, a, 0], true);
+      eyeCfg = [0.3, 0.12, 0.88, 0.12, sp.feat === 'hawk' ? '#f2b632' : '#ffd23f'];
+      break;
+    case 'penguin':
+      add(head, GS, light, [0, -0.15*r, 0.55*r], [0.62*r, 0.58*r, 0.5*r]);
+      add(head, GC, toon(sp.bird), [0, -0.12*r, 1.05*r], [0.12*r, 0.36*r, 0.12*r], [Math.PI/2, 0, 0], true);
+      add(torso, GS, light, [0, -d.th*0.05, d.td*0.55], [d.tw*1.0, d.th*0.98, d.td*0.85]);
+      tail = tailGroup(0, -d.th*0.85, -d.td*1.1);
+      add(tail, GC, body, [0, 0, -d.td*0.2], [d.tw*0.35, d.th*0.6, d.tw*0.12], [-2.2, 0, 0], true);
+      eyeCfg = [0.3, 0.2, 0.86, 0.11];
+      break;
+    case 'yak':
+    case 'buffalo': {
+      const horn = sp.feat === 'buffalo' ? emberMat : ivory;
+      add(head, GS, light, [0, -0.25*r, 0.8*r], [0.5*r, 0.4*r, 0.45*r]);
+      add(head, GS, black, [0, -0.2*r, 1.18*r], [0.18*r, 0.1*r, 0.06*r]);
+      for (const sx of [-1, 1]){
+        add(head, GBAND, horn, [sx*0.62*r, 0.55*r, 0], [0.45*r, 0.6*r, 0.9*r], [0, Math.PI/2, sx*0.35], true);
+        add(head, GS, body, [sx*0.7*r, 0.2*r, -0.1*r], [0.22*r, 0.12*r, 0.1*r], null, true);
+      }
+      add(torso, GS, body, [0, d.th*0.9, d.tl*0.4], [d.tw*0.9, d.th*0.7, d.tl*0.55], null, true);
+      if (sp.feat === 'yak'){
+        // franja de pelo comprido caindo dos lados
+        for (let i = 0; i < 9; i++) for (const sx of [-1, 1]) add(torso, GC, dark, [sx*d.tw*1.05, -d.th*0.7, d.tl*(-0.9 + i*0.22)], [0.09*s, d.th*1.1, 0.09*s], [Math.PI, 0, sx*0.15]);
+        add(head, GS, dark, [0, 0.55*r, 0.25*r], [0.55*r, 0.3*r, 0.5*r]);
+      } else {
+        // rachaduras de lava no couro
+        for (let i = 0; i < 7; i++){ const a = rand(-1.3, 1.3); add(torso, GB, emberMat, [Math.sin(a)*d.tw*1.18, Math.cos(a)*d.th*1.2, rand(-0.8, 0.8)*d.tl], [0.03*s, 0.03*s, rand(0.15, 0.3)*s], [0, rand(-0.6, 0.6), a]); }
+      }
+      tail = tailGroup(0, d.th*0.3, -d.tl*1.05);
+      add(tail, GY, dark, [0, -d.th*0.4, -0.02], [0.025*s, d.th*0.9, 0.025*s], [0.3, 0, 0]);
+      add(tail, GS, sp.feat === 'buffalo' ? emberMat : dark, [0, -d.th*0.85, -0.12*s], [0.07*s, 0.12*s, 0.07*s]);
+      eyeCfg = [0.5, 0.2, 0.62, 0.08, sp.feat === 'buffalo' ? '#ff6a1f' : null];
+      break;
+    }
+    case 'hare':
+      for (const sx of [-1, 1]){
+        add(head, GS, body, [sx*0.28*r, 1.15*r, -0.1*r], [0.16*r, 0.65*r, 0.1*r], [0, 0, -sx*0.18], true);
+        add(head, GS, toon('#ffb3c7'), [sx*0.28*r, 1.15*r, -0.02*r], [0.09*r, 0.48*r, 0.04*r], [0, 0, -sx*0.18]);
+      }
+      add(head, GS, light, [0, -0.22*r, 0.72*r], [0.4*r, 0.3*r, 0.35*r]);
+      add(head, GS, toon('#ff8fb1'), [0, -0.08*r, 1.02*r], [0.08*r, 0.06*r, 0.05*r]);
+      tail = tailGroup(0, d.th*0.2, -d.tl*1.1);
+      add(tail, GS, light, [0, 0, 0], [d.tw*0.45, d.tw*0.45, d.tw*0.45], null, true);
+      eyeCfg = [0.4, 0.22, 0.76, 0.11];
+      break;
+    case 'gator':
+      add(head, GS, body, [0, -0.2*r, 1.1*r], [0.55*r, 0.28*r, 1.05*r], null, true);
+      add(head, GS, light, [0, -0.38*r, 1.0*r], [0.45*r, 0.1*r, 0.9*r]);
+      for (const sx of [-1, 1]){
+        for (let i = 0; i < 5; i++) add(head, GC, ivory, [sx*0.45*r, -0.38*r, (0.55 + i*0.3)*r], [0.05*r, 0.14*r, 0.05*r], [Math.PI, 0, 0]);
+        add(head, GS, black, [sx*0.12*r, -0.05*r, 2.05*r], [0.05*r, 0.04*r, 0.04*r]);
+      }
+      for (let i = 0; i < 7; i++) for (const sx of [-1, 1]) add(torso, GB, dark, [sx*d.tw*0.35, d.th*1.18, d.tl*(0.8 - i*0.27)], [0.07*s, 0.07*s, 0.12*s], [0.3, 0, 0]);
+      tail = tailGroup(0, 0, -d.tl*1.0);
+      add(tail, GC, body, [0, -d.th*0.1, -d.tl*1.05], [d.tw*0.55, d.tl*2.2, d.tw*0.35], [-Math.PI/2 - 0.08, 0, 0], true);
+      eyeCfg = [0.32, 0.55, 0.45, 0.09, '#e8c440'];
+      break;
+    case 'frog':
+      add(head, GS, body, [0, -0.15*r, 0.25*r], [1.15*r, 0.75*r, 0.9*r], null, true);
+      add(head, GS, light, [0, -0.45*r, 0.5*r], [0.85*r, 0.35*r, 0.6*r]);
+      for (let i = 0; i < 8; i++) add(torso, GS, dark, [rand(-1, 1)*d.tw*0.9, rand(-0.2, 1)*d.th, -d.td*1.05], [0.06*s, 0.06*s, 0.03*s]);
+      eyeCfg = [0.5, 0.75, 0.45, 0.14];
+      break;
+    case 'capybara':
+      add(head, GS, body, [0, -0.08*r, 0.75*r], [0.62*r, 0.62*r, 0.75*r], null, true);
+      add(head, GS, dark, [0, -0.05*r, 1.45*r], [0.42*r, 0.32*r, 0.12*r]);
+      for (const sx of [-1, 1]){ add(head, GS, dark, [sx*0.1*r, 0.02*r, 1.55*r], [0.05*r, 0.07*r, 0.03*r]); add(head, GS, body, [sx*0.55*r, 0.72*r, -0.2*r], [0.16*r, 0.14*r, 0.1*r], null, true); }
+      // a capivara é tão calma que um passarinho mora na cabeça dela
+      {
+        const bird = new T.Group(); bird.position.set(0.05*r, 1.0*r, 0.1*r); head.add(bird);
+        add(bird, GS, toon('#ffd23f'), [0, 0, 0], [0.18*r, 0.16*r, 0.22*r], null, true);
+        add(bird, GS, toon('#ffd23f'), [0, 0.18*r, 0.12*r], [0.12*r, 0.12*r, 0.12*r], null, true);
+        add(bird, GC, toon('#f28c28'), [0, 0.18*r, 0.26*r], [0.04*r, 0.1*r, 0.04*r], [Math.PI/2, 0, 0]);
+        add(bird, GS, black, [0.06*r, 0.22*r, 0.2*r], [0.025*r, 0.03*r, 0.02*r]);
+      }
+      eyeCfg = [0.45, 0.32, 0.62, 0.075];
+      break;
   }
   const ey = makeEyes(head, r, eyeCfg[0], eyeCfg[1], eyeCfg[2], eyeCfg[3], eyeCfg[4]);
   // boca boba: sorriso torto, língua que escapa e dentes de coelho
   let mouth = null, tongue = null;
-  if (sp.feat !== 'owl'){
-    const MZ = {bear:1.12, gorilla:1.02, kangaroo:1.22, monkey:1.02, rhino:1.5, boar:1.32, wolf:1.5, cheetah:1.0, fox:1.38};
+  if (!sp.bird){
+    const MZ = {bear:1.12, gorilla:1.02, kangaroo:1.22, monkey:1.02, rhino:1.5, boar:1.32, wolf:1.5, cheetah:1.0, fox:1.38,
+      armadillo:1.25, lizard:1.4, salamander:1.4, yak:1.25, buffalo:1.25, hare:1.1, gator:2.1, frog:1.25, capybara:1.65};
     const mz = (MZ[sp.feat] || 1.0)*r*0.9, my = sp.plan === 'quad' ? -0.36*r : -0.42*r;
     mouth = add(head, GS, toon('#5a1a24'), [0.03*r, my, mz], [0.2*r, 0.07*r, 0.07*r], [0, 0, 0.12]);
     tongue = add(head, GS, toon('#ff7b93'), [0.07*r, my - 0.13*r, mz + 0.02*r], [0.1*r, 0.17*r, 0.05*r], null, true);
     tongue.visible = false;
-    if (['bear','monkey','kangaroo','cheetah','gorilla','wolf','fox'].includes(sp.feat))
+    if (['bear','monkey','kangaroo','cheetah','gorilla','wolf','fox','hare','capybara','armadillo'].includes(sp.feat))
       for (const sx of [-1, 1]) add(head, GB, toon('#ffffff'), [sx*0.05*r + 0.02*r, my - 0.07*r, mz + 0.01*r], [0.08*r, 0.11*r, 0.03*r]);
   }
   const limb = (rad, half, tip, mat) => {
@@ -1888,15 +2031,15 @@ function makeCreatureMeshes(c){
   let list;
   if (c.plan === 'biped'){
     const arms = [0, 1].map(() => {
-      if (sp.feat === 'owl'){ const g = new T.Group(); add(g, GS, dark, [0, -d.al*0.1, -d.ar*0.5], [d.ar*0.7, d.al*1.15, d.ar*3.2], null, true); return g; }
+      if (sp.bird){ const g = new T.Group(); add(g, GS, dark, [0, -d.al*0.1, -d.ar*0.5], [d.ar*0.7, d.al*1.15, d.ar*3.2], null, true); return g; }
       const fist = mesh(GS, sp.feat === 'gorilla' ? dark : body); fist.scale.setScalar(d.ar*1.45);
       return limb(d.ar, d.al, fist, body);
     });
     const legs = [0, 1].map(() => {
-      const foot = mesh(GS, sp.feat === 'owl' ? toon('#e8a33a') : dark);
-      const big = sp.feat === 'kangaroo' ? 1.7 : 1;
+      const foot = mesh(GS, sp.bird ? toon(sp.bird) : dark);
+      const big = sp.feat === 'kangaroo' || sp.feat === 'frog' ? 1.7 : 1;
       foot.scale.set(d.lr*1.3, d.lr*0.75, d.lr*1.8*big);
-      const g = limb(d.lr, d.ll, foot, sp.feat === 'owl' ? toon('#e8a33a') : body); foot.position.z = d.lr*0.5*big; return g;
+      const g = limb(d.lr, d.ll, foot, sp.bird ? toon(sp.bird) : body); foot.position.z = d.lr*0.5*big; return g;
     });
     list = [legs[0], legs[1], torso, arms[0], arms[1], head];
   } else {
@@ -2146,7 +2289,7 @@ function updateCreature(c, dt){
     let str = 4, bl = 0.15;
     if (c.punchT[i] > 0){ yawLocal(c.yaw, AX, -Math.PI/2, _ql); str = 24; bl = 0.6; }
     else if (c.grabHeld){ yawLocal2(c.yaw, AX, inp.lift && c.grabs.length ? -Math.PI*0.95 : -Math.PI/2 + 0.1, AZ, side*0.12, _ql); str = 14; bl = 0.4; }
-    else if (c.sp.feat === 'owl'){ yawLocal2(c.yaw, AX, 0.1, AZ, side*(stepping || !c.grounded ? 0.5 + Math.sin(clock*18)*0.4 : 0.15), _ql); str = 8; bl = 0.3; }
+    else if (c.sp.bird){ yawLocal2(c.yaw, AX, 0.1, AZ, side*(stepping || !c.grounded ? 0.5 + Math.sin(clock*18)*0.4 : 0.15), _ql); str = 8; bl = 0.3; }
     else yawLocal2(c.yaw, AX, -0.15 + (stepping ? (i ? -sw : sw)*0.6 : 0), AZ, side*0.2, _ql);
     drive(A, _ql, str*Math.max(bal, 0.5), bl);
   });
@@ -2286,7 +2429,7 @@ function throwRock(c, target){
   b.isRock = true; b.thrower = c; b.spent = false; b.born = clock;
   b.addEventListener('collide', e => onCollide(b, e.body));
   world.addBody(b);
-  const m = mesh(rockGeo, toon('#8f887b')); scene.add(m);
+  const m = mesh(rockGeo, toon(c.sp.rock || '#8f887b')); scene.add(m);
   rocks.push({body:b, mesh:m});
 }
 

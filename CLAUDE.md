@@ -47,7 +47,7 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
 
 **Data:**
 - `ATTR` and `BEATS` define the class triangle: Força > Agilidade > Inteligência > Força, applied via `adv()` (×1.3 / ×0.8).
-- `SPECIES` has 10 animals; the new maps reuse them at higher levels. Each has `plan` (`biped` | `quad`), `feat` (the visual builder key), `base`/`grow` for [FOR, AGI, INT], and `special`.
+- `SPECIES` has 22 animals: the 10 of Campos Pancada plus 3 per new map (marked with `region`, one per class). Patches in the new maps spawn mostly their region's animals. Optional fields: `bird` (beak/feet color; birds get wings and no mouth), `rock` (color of what `throw` launches). Each has `plan` (`biped` | `quad`), `feat` (the visual builder key), `base`/`grow` for [FOR, AGI, INT], and `special`.
 - `stats(member)` derives every combat number (HP, power, speed, dodge, special cooldown, etc.) from level. Members only store `{species, level, xp, hp, maxHp, nick}`.
 - The team holds at most `TEAM_MAX` (5) members; the rest live in `game.box`, managed by `showBox()` at the terminal next to the Centro (`BOX_SPOT`).
 - `ITEMS` holds cure and capture items. Capture items are a nut or seed (Bolota/Pinha/Coco/Semente), each with a `mult`.

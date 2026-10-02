@@ -38,6 +38,14 @@ No celular aparecem botões na tela.
   - **Força:** Urso, Gorila, Rinoceronte, Javali
   - **Agilidade:** Lobo, Guepardo, Canguru
   - **Inteligência:** Macaco, Coruja, Raposa
+- **Mais 12 animais que só aparecem em um mapa (um de cada classe por mapa):**
+
+  | Mapa | Força | Agilidade | Inteligência |
+  |---|---|---|---|
+  | Sertão Rachado | Tatu (Tatu-Bola) | Calango (Corrida Quente) | Carcará (Pedra do Alto) |
+  | Pico Congelado | Iaque (Patada na Neve) | Lebre-da-Neve (Salto da Lebre) | Pinguim (Bola de Neve) |
+  | Brejo Lamacento | Jacaré (Bote do Jacaré) | Sapo-Boi (Pulo do Sapo) | Capivara (Calma Contagiante) |
+  | Cratera Brava | Búfalo de Lava (Pisão Vulcânico) | Salamandra (Faísca) | Fênix (Brilho da Fênix) |
 - **Triângulo de vantagem:** Força vence Agilidade, Agilidade vence Inteligência, Inteligência vence Força (+30% de dano).
 - **Atributos:** FOR, AGI e INT que crescem por nível. Deles saem vida, dano, velocidade, esquiva e recarga do especial.
 - **Golpe especial próprio de cada animal:**
