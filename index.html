@@ -1507,8 +1507,11 @@ function finishBattle(){
     }
     const xp = Math.round((r === 'capture' ? 10 : 15) + 10*W.member.level);
     trainer.cheerT = Math.max(trainer.cheerT, 1.8);
-    lead.xp += xp; log.push(`${lead.nick} ganhou ${xp} XP.`);
-    levelUp(lead, log);
+    // todos os animais vivos do time ganham XP (o recém-capturado não conta)
+    const alive = game.team.filter(m => m.hp > 0 && m !== W.member);
+    for (const m of alive) m.xp += xp;
+    log.push(alive.length > 1 ? `Seu time ganhou ${xp} XP cada (${alive.length} animais).` : `${(alive[0] || lead).nick} ganhou ${xp} XP.`);
+    for (const m of alive) levelUp(m, log);
     const coins = Math.round((r === 'capture' ? 10 : 25) + (r === 'capture' ? 5 : 10)*W.member.level);
     game.money += coins; log.push(`Você ganhou ${coins} moedas.`);
   }
