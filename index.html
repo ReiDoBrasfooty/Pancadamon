@@ -452,7 +452,7 @@ const POND = {x:-12, z:25, r:4.5};
 const trainer = {pos:new T.Vector3(0, 0, -11), yaw:Math.PI, walk:0, moving:false, throwT:0, cheerT:0};
 const trLegG = new T.CylinderGeometry(0.09, 0.08, 0.5, 8); trLegG.translate(0, -0.25, 0);
 const trArmG = new T.CylinderGeometry(0.065, 0.055, 0.5, 8); trArmG.translate(0, -0.25, 0);
-// Treinador "bonequinho": cabeção, olhões soltos, boné de hélice torto, braços de macarrão
+// Treinador "bonequinho": cabeção, olhões soltos, boné torto, braços de macarrão
 function makeTrainerModel(jacket){
   const g = new T.Group(), body = new T.Group(); g.add(body);
   const skin = toon('#f7c9a3'), cloth = toon(jacket), pants = toon('#3a5bb8'), ink = toon('#16131c'), white = toon('#ffffff');
@@ -488,17 +488,12 @@ function makeTrainerModel(jacket){
     pupils.push({m:pm, cx, cy, cz, Rx:R, Rz:R*0.8, lim:R - pr*0.85, ux:0, uy:0, vx:0, vy:0, k:rand(24, 50), dmp:rand(2.5, 5), gk:rand(10, 16)});
   }
   for (const [x, z, rz] of [[-0.75, -0.3, 0.9], [0.75, -0.35, -0.9], [-0.3, -0.85, 0.3]]){ const h = mesh(GC, toon('#7a4a26'), false); h.position.set(x, 0.35, z); h.scale.set(0.12, 0.35, 0.12); h.rotation.set(-0.6, 0, rz); head.add(h); }
-  // boné de hélice, meio torto
+  // boné meio torto
   const cap = new T.Group(); cap.position.set(0, 0.5, -0.12); cap.rotation.set(-0.38, 0, 0.18); head.add(cap);
   const dome = mesh(new T.SphereGeometry(1, 16, 8, 0, TAU, 0, Math.PI/2), cloth); dome.scale.set(0.98, 0.62, 0.98); outline(dome, 1.06); cap.add(dome);
   const brim = mesh(GS, cloth); brim.position.set(0.3, 0.02, 0.8); brim.scale.set(0.6, 0.06, 0.5); brim.rotation.y = 0.5; outline(brim, 1.15); cap.add(brim);
-  const stalk = mesh(GY, toon('#f2b632'), false); stalk.position.y = 0.88; stalk.scale.set(0.05, 0.25, 0.05); cap.add(stalk);
-  const prop = new T.Group(); prop.position.y = 1.02; cap.add(prop);
-  for (const [a, col] of [[0, '#3b64d6'], [Math.PI, '#d9472b'], [Math.PI/2, '#2b9a4a'], [-Math.PI/2, '#f2b632']]){
-    const b = mesh(GS, toon(col), false); b.position.set(Math.cos(a)*0.32, 0, Math.sin(a)*0.32); b.scale.set(0.3, 0.03, 0.1); b.rotation.y = -a; prop.add(b);
-  }
   scene.add(g);
-  return {g, body, legs, arms, neck, head, pack, prop, mouth, tongue, pupils};
+  return {g, body, legs, arms, neck, head, pack, mouth, tongue, pupils};
 }
 // anima um treinador (o seu ou o de um amigo); st guarda o estado da animação
 function animateTrainer(m, st, dt){
@@ -527,7 +522,6 @@ function animateTrainer(m, st, dt){
   m.neck.rotation.z = -m.body.rotation.z*1.6 + (st.moving ? Math.sin(st.walk*2)*0.05 : Math.sin(st.t*0.9)*0.08);
   m.neck.rotation.x = st.moving ? -0.18 + Math.sin(st.walk*2)*0.08 : 0;
   m.pack.position.y = 0.84 + (st.moving ? Math.abs(Math.cos(st.walk))*0.05 : 0);
-  m.prop.rotation.y += dt*(st.moving || cheer ? 30 : 5);
   m.tongue.visible = st.moving || cheer;
   m.mouth.scale.y = cheer || hop ? 0.22 : 0.13;
   st.pupils = m.pupils;
