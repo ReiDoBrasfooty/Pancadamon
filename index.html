@@ -355,7 +355,17 @@ scene.add(sun, sun.target);
 const mats = {};
 // sombreamento de desenho animado em 3 tons
 const toonGrad = (() => { const t = new T.DataTexture(new Uint8Array([120, 190, 255]), 3, 1, T.LuminanceFormat); t.minFilter = t.magFilter = T.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
-const toon = c => mats['t'+c] || (mats['t'+c] = new T.MeshToonMaterial({color:c, gradientMap:toonGrad}));
+// contraluz: filete de luz na borda das formas; a força vem do estilo (STYLES[].rim)
+const RIM = {amt:{value:0}, col:{value:new T.Color('#fff1d6')}};
+function rimify(m){
+  m.onBeforeCompile = s => {
+    s.uniforms.rimAmt = RIM.amt; s.uniforms.rimCol = RIM.col;
+    s.fragmentShader = 'uniform float rimAmt; uniform vec3 rimCol;\n' + s.fragmentShader.replace('#include <dithering_fragment>',
+      '#include <dithering_fragment>\n float rim = pow(1. - clamp(normal.z, 0., 1.), 2.5)*smoothstep(-.3, .6, normal.y);\n gl_FragColor.rgb += rimCol*rim*rimAmt;');
+  };
+  return m;
+}
+const toon = c => mats['t'+c] || (mats['t'+c] = rimify(new T.MeshToonMaterial({color:c, gradientMap:toonGrad})));
 // contorno escuro (casca invertida) nas formas principais
 const OUTLINE = new T.MeshBasicMaterial({color:'#2a2140', side:T.BackSide});
 function outline(m, k=1.09){ const o = new T.Mesh(m.geometry, OUTLINE); o.scale.setScalar(k); m.add(o); return m; }
@@ -3900,7 +3910,7 @@ function step(dt){
 /* ================= Estilos visuais (pós-processamento) ================= */
 // a cena é desenhada numa textura (cor + profundidade) e um shader de tela cheia aplica o estilo
 const POST_FS = `
-uniform sampler2D tCol, tDep; uniform vec2 res; uniform float mode, seed, pr;
+uniform sampler2D tCol, tDep; uniform vec2 res; uniform float mode, seed, pr; uniform vec3 shT, hiT, fogC;
 varying vec2 vUv;
 float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
 float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3. - 2.*f);
@@ -3974,7 +3984,7 @@ void main(){
     c *= 1. + .03*fp*(1. - tilt);
     c *= .97 + .05*n(p*.6 + seed*13.);
     vec2 v = vUv - .5; c *= 1. - .35*smoothstep(.35, .85, length(v));
-  } else {                    // CORDEL: xilogravura, tinta preta, hachuras talhadas, papel de folheto
+  } else if (mode < 5.5){     // CORDEL: xilogravura, tinta preta, hachuras talhadas, papel de folheto
     vec3 paper = vec3(.95, .89, .76)*(.93 + .07*fbm(p*.5));
     vec3 ink = vec3(.12, .08, .07);
     float l = lum(c);
@@ -3991,12 +4001,43 @@ void main(){
     e *= .4 + .6*step(.2, n(p*.2));
     o = mix(o, ink, step(.3, e));
     c = o;
+  } else {
+    // DIORAMA (6) e ANIME (7): acabamento de estúdio, com cor por mapa (shT sombras, hiT luzes, fogC névoa)
+    float d = dep(uv), anime = step(6.5, mode);
+    if (anime < .5){             // maquete: desfoque leve em cima e embaixo
+      float tilt = smoothstep(.3, .5, abs(vUv.y - .48))*.8;
+      vec3 s = vec3(0.);
+      for (int i = 0; i < 8; i++){ float a = float(i)*.785; s += col(uv + vec2(cos(a), sin(a))*tilt*4.*pr/res); }
+      c = mix(c, s/8., tilt);
+    } else {                     // brilho: as partes claras vazam luz
+      vec3 bl = vec3(0.);
+      for (int i = 0; i < 12; i++){ float a = float(i)*.524; float rr = mod(float(i), 2.) < .5 ? 6. : 13.; bl += max(col(uv + vec2(cos(a), sin(a))*rr*pr/res) - .9, 0.); }
+      c += bl/12.*1.6*hiT;
+    }
+    // sombra de contato: escurece onde algo mais perto da câmera está do lado
+    float ao = 0.;
+    for (int i = 0; i < 8; i++){ float a = float(i)*.785 + .3; float dd = d - dep(uv + vec2(cos(a), sin(a))*6.*pr/res); ao += smoothstep(.05, .5, dd)*(1. - smoothstep(1.5, 3., dd)); }
+    c *= 1. - ao/8.*mix(.5, .35, anime);
+    // correção de cor: menos saturado, sombras frias e luzes quentes
+    c = sat(c, mix(.8, .9, anime));
+    c = (c - .5)*mix(1.06, 1.12, anime) + .5;
+    float l = lum(c);
+    c *= mix(shT, hiT, smoothstep(.12, .75, l));
+    c = pow(c, vec3(mix(.95, 1.04, anime)))*mix(1., .95, anime);
+    // contorno da cor do próprio objeto; no anime, mais forte na silhueta
+    float e = edge(uv, mix(1., 1.3, anime)*pr, mix(.45, .3, anime));
+    c = mix(c, c*mix(.45, .3, anime) + vec3(.01, 0., .04)*anime, e*mix(.75, .9, anime));
+    // névoa ao fundo e céu em degradê
+    float hz = smoothstep(62., 78., d);
+    c = mix(c, fogC, hz*mix(.35, .2, anime));
+    if (d > 290.) c = mix(fogC*.98, fogC*mix(vec3(.88, .93, 1.04), vec3(.62, .78, 1.08), anime), vUv.y);
+    vec2 v = vUv - .5; c *= 1. - mix(.22, .15, anime)*smoothstep(.4, .85, length(v));
   }
   gl_FragColor = vec4(c, 1.);
 }`;
 const post = (() => {
   const mat = new T.ShaderMaterial({
-    uniforms:{tCol:{value:null}, tDep:{value:null}, res:{value:new T.Vector2()}, mode:{value:1}, seed:{value:0}, pr:{value:1}},
+    uniforms:{tCol:{value:null}, tDep:{value:null}, res:{value:new T.Vector2()}, mode:{value:1}, seed:{value:0}, pr:{value:1}, shT:{value:new T.Vector3(1, 1, 1)}, hiT:{value:new T.Vector3(1, 1, 1)}, fogC:{value:new T.Color()}},
     vertexShader:'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
     fragmentShader:POST_FS, depthTest:false, depthWrite:false,
   });
@@ -4013,15 +4054,26 @@ const STYLES = {
   pixel:    {mode:3, grad:[110, 185, 255], line:'#2a2140', scale:1/3},
   massinha: {mode:4, grad:smoothGrad(95, 255), line:null, soft:true, hold:5},
   cordel:   {mode:5, grad:[70, 255], line:'#1e1410'},
+  diorama:  {mode:6, grad:[135, 150, 225, 255], line:null, soft:true, rim:0.18},
+  anime:    {mode:7, grad:[130, 255], line:null, rim:0.5},
 };
+// cor de cada mapa nos estilos de estúdio: sh multiplica as sombras, hi as luzes, fog é a névoa do fundo
+const GRADES = [
+  {sh:[0.84, 0.88, 1.08], hi:[1.07, 1.02, 0.9], fog:'#cfe3e8'},    // Campos: tarde dourada
+  {sh:[0.9, 0.82, 0.95], hi:[1.1, 1.0, 0.84], fog:'#f0d9b0'},      // Sertão: sol forte
+  {sh:[0.8, 0.9, 1.12], hi:[1.0, 1.02, 1.06], fog:'#e2eef6'},      // Pico: frio
+  {sh:[0.82, 0.95, 0.92], hi:[1.02, 1.05, 0.88], fog:'#b8c9a8'},   // Brejo: úmido
+  {sh:[0.9, 0.78, 0.9], hi:[1.12, 0.98, 0.85], fog:'#d9a080'},     // Cratera: brasa
+];
 let style = STYLES.atual;
 function setStyle(name){
-  style = STYLES[name] || STYLES.gibi;
+  style = STYLES[name] || STYLES.anime;
   const g = new Uint8Array(style.grad);
   toonGrad.image = {data:g, width:g.length, height:1};
   toonGrad.minFilter = toonGrad.magFilter = style.soft ? T.LinearFilter : T.NearestFilter;
   toonGrad.needsUpdate = true;
   OUTLINE.visible = !!style.line; if (style.line) OUTLINE.color.set(style.line);
+  RIM.amt.value = style.rim || 0;
   post.w = 0;
   return name;
 }
@@ -4042,9 +4094,11 @@ function drawFrame(){
   }
   u.tCol.value = post.rt.texture; u.tDep.value = post.rt.depthTexture;
   u.res.value.set(w, h); u.mode.value = style.mode; u.pr.value = pr*k;
+  const gr = GRADES[curRegion ? curRegion.id : 0] || GRADES[0];
+  u.shT.value.fromArray(gr.sh); u.hiT.value.fromArray(gr.hi); u.fogC.value.set(gr.fog);
   renderer.render(post.qs, post.qc);
 }
-setStyle(new URLSearchParams(location.search).get('estilo') || 'gibi');
+setStyle(new URLSearchParams(location.search).get('estilo') || 'anime');
 
 function render(){
   for (const c of creatures) syncCreature(c);
