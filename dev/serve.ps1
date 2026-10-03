@@ -2,11 +2,13 @@
 #   http://localhost:8765/    -> jogo normal (single-player)
 #   http://localhost:8765/mp  -> jogo com o simulador de multiplayer (abra em duas abas)
 # Uso: powershell -ExecutionPolicy Bypass -File dev/serve.ps1
+# A porta vem da variável PORT (o Claude Code escolhe uma livre); sem ela, usa 8765.
 $root = Split-Path $PSScriptRoot -Parent
+$port = if ($env:PORT) { $env:PORT } else { '8765' }
 $listener = New-Object System.Net.HttpListener
-$listener.Prefixes.Add('http://localhost:8765/')
+$listener.Prefixes.Add("http://localhost:$port/")
 $listener.Start()
-Write-Output 'Servindo em http://localhost:8765/ (multiplayer simulado em /mp)'
+Write-Output "Servindo em http://localhost:$port/ (multiplayer simulado em /mp)"
 while ($listener.IsListening) {
   $ctx = $listener.GetContext()
   $html = [System.IO.File]::ReadAllText((Join-Path $root 'index.html'), [System.Text.Encoding]::UTF8)

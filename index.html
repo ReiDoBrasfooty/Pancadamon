@@ -1965,10 +1965,10 @@ function updatePupils(c, head){
 /* ---- peças das criaturas mitológicas ---- */
 const stormMat = new T.MeshBasicMaterial({color:'#7cc7ff'}), haloMat = new T.MeshBasicMaterial({color:'#ffe066'});
 // par de asas nas costas; bat = asa de morcego (dragão), senão de penas. Batem em syncCreature (c.wings)
-function mythWings(c, torso, mat, tipMat, span, bat){
-  const d = c.d, list = [];
+function mythWings(c, torso, mat, tipMat, span, bat, pos){
+  const d = c.d, list = [], [px, py, pz] = pos || [d.tw*0.7, d.th*1.0, d.tl*0.2];
   for (const side of [-1, 1]){
-    const g = new T.Group(); g.position.set(side*d.tw*0.7, d.th*1.0, d.tl*0.2); g.userData.side = side; torso.add(g);
+    const g = new T.Group(); g.position.set(side*px, py, pz); g.userData.side = side; torso.add(g);
     if (bat){
       add(g, GY, mat, [side*span*0.5, 0.02*span, 0.05*span], [0.045*span, span, 0.045*span], [0, 0, Math.PI/2], true);
       add(g, GS, tipMat, [side*span*0.5, 0, -span*0.2], [span*0.5, 0.025*span, span*0.3], null, true);
@@ -2335,12 +2335,13 @@ function makeCreatureMeshes(c){
   }
   const ey = makeEyes(head, r, eyeCfg[0], eyeCfg[1], eyeCfg[2], eyeCfg[3], eyeCfg[4]);
   // boca boba: sorriso torto, língua que escapa e dentes de coelho
-  let mouth = null, tongue = null;
+  let mouth = null, tongue = null, mouthAt = {y:-0.42*r, z:r};
   if (!sp.bird){
     const MZ = {bear:1.12, gorilla:1.02, kangaroo:1.22, monkey:1.02, rhino:1.5, boar:1.32, wolf:1.5, cheetah:1.0, fox:1.38,
       armadillo:1.25, lizard:1.4, salamander:1.4, yak:1.25, buffalo:1.25, hare:1.1, gator:2.1, frog:1.25, capybara:1.65,
       unicorn:1.55, sphinx:1.12, hydra:1.55, dragon:1.65};
     const mz = (MZ[sp.feat] || 1.0)*r*0.9, my = sp.plan === 'quad' ? -0.36*r : -0.42*r;
+    mouthAt = {y:my, z:mz};
     mouth = add(head, GS, toon('#5a1a24'), [0.03*r, my, mz], [0.2*r, 0.07*r, 0.07*r], [0, 0, 0.12]);
     tongue = add(head, GS, toon('#ff7b93'), [0.07*r, my - 0.13*r, mz + 0.02*r], [0.1*r, 0.17*r, 0.05*r], null, true);
     tongue.visible = false;
@@ -2367,74 +2368,240 @@ function makeCreatureMeshes(c){
       foot.scale.set(d.lr*1.3, d.lr*0.75, d.lr*1.8*big);
       const g = limb(d.lr, d.ll, foot, sp.bird ? toon(sp.bird) : body); foot.position.z = d.lr*0.5*big; return g;
     });
-    if (sp.stage) addGear(c, torso, head, arms, legs);
+    if (sp.stage) addGear(c, torso, head, arms, legs, eyeCfg, mouthAt);
     list = [legs[0], legs[1], torso, arms[0], arms[1], head];
   } else {
     const legs = [0, 1, 2, 3].map(() => { const paw = mesh(GS, dark); paw.scale.set(d.lr*1.25, d.lr*0.7, d.lr*1.5); const g = limb(d.lr, d.ll, paw, body); paw.position.z = d.lr*0.3; return g; });
     list = [...legs, torso, head];
   }
   list.forEach(m => scene.add(m));
-  c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.pupils = ey.pupils; c.tail = tail; c.wings = wings; c.mouth = mouth; c.tongue = tongue; c.blepT = 0;
+  c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.pupils = ey.pupils; c.tail = tail; c.wings = wings || c.wingsBack || null; c.mouth = mouth; c.tongue = tongue; c.blepT = 0;
 }
 
-// Roupa das formas evoluídas. Guerreiro: shorts, cinto e munhequeira, mais um detalhe da classe.
-// Mestre: Força veste armadura e elmo de chifres, Agilidade lenço comprido e espada nas costas, Inteligência capa, chapéu e cajado.
-const GEAR = {
-  forca:{cloth:'#b8402b', pants:'#4a3426', metal:'#7d889c'},
-  agilidade:{cloth:'#2f9a5a', pants:'#22303a', metal:'#8a95a6'},
-  inteligencia:{cloth:'#3b56b8', pants:'#2c2a4a', metal:'#6a3fa0'}
+/* ---- Roupa das formas evoluídas ----
+   Cada espécie tem o figurino de cada forma em EVO_KITS, montado com as peças de K (roupa, chapéu, coisa na mão, efeito).
+   P = {c, sp, d, r, s, torso, head, arms, legs, eye, mouth}; arms[1] é a mão direita. Na mão, o "pra frente" é +z do braço. */
+const GHEMI = new T.SphereGeometry(1, 16, 8, 0, TAU, 0, Math.PI/2), GOCT = new T.OctahedronGeometry(1, 0);
+const GOLD = '#f2c230';
+const iceMat = new T.MeshBasicMaterial({color:'#bfeaff'}), foxfireMat = new T.MeshBasicMaterial({color:'#6fc3ff'});
+const glassMat = new T.MeshBasicMaterial({color:'#d8f4ff', transparent:true, opacity:0.55});
+const kc = col => typeof col === 'string' ? toon(col) : col;   // aceita cor ou material pronto
+// z da frente do tronco (camisa) na altura y, pra colar coisas no peito
+const fz = (P, y) => P.d.td*1.36*Math.sqrt(Math.max(0.05, 1 - Math.pow((y - P.d.th*0.08)/P.d.th, 2)));
+// faixa em volta da cabeça na altura y (em raios)
+const ring = (P, mat, y, h=0.16, k=1.04) => { const w = Math.sqrt(Math.max(0.05, 1 - y*y))*k*P.r; return add(P.head, GY, kc(mat), [0, y*P.r, 0], [w, h*P.r, w]); };
+const K = {
+  // ---- roupa
+  shorts(P, col){ const {d} = P, m = kc(col); for (const g of P.legs) add(g, GY, m, [0, d.ll*0.45, 0], [d.lr*1.3, d.ll*1.1, d.lr*1.3], null, true); add(P.torso, GY, m, [0, -d.th*0.82, 0], [d.tw*0.98, d.th*0.4, d.td*1.05]); },
+  pants(P, col, wide=1){ const {d} = P, m = kc(col); for (const g of P.legs) add(g, GY, m, [0, d.ll*0.1, 0], [d.lr*1.3*wide, d.ll*1.9, d.lr*1.3*wide], null, true); add(P.torso, GY, m, [0, -d.th*0.82, 0], [d.tw*0.98, d.th*0.4, d.td*1.05]); },
+  boots(P, col){ const {d} = P; for (const g of P.legs) add(g, GY, kc(col), [0, -d.ll*0.65, 0], [d.lr*1.4, d.ll*0.6, d.lr*1.4], null, true); },
+  belt(P, col='#3a2618', buckle=GOLD){ const {d, s} = P; add(P.torso, GY, kc(col), [0, -d.th*0.55, 0], [d.tw*1.1, d.th*0.18, d.td*1.2]); if (buckle) add(P.torso, GB, kc(buckle), [0, -d.th*0.55, d.td*1.2], [d.tw*0.36, d.th*0.24, 0.035*s]); },
+  champBelt(P){ const {d, s} = P; K.belt(P, '#2a2140', null); add(P.torso, GY, kc(GOLD), [0, -d.th*0.55, d.td*1.2], [d.tw*0.5, 0.04*s, d.tw*0.4], [Math.PI/2, 0, 0], true); add(P.torso, GS, kc('#d9472b'), [0, -d.th*0.55, d.td*1.26], [0.06*s, 0.06*s, 0.03*s]); },
+  shirt(P, col, sleeves=true){ const {d} = P, m = kc(col); add(P.torso, GS, m, [0, d.th*0.08, 0], [d.tw*1.23, d.th*1.0, d.td*1.34], null, true); if (sleeves) for (const a of P.arms) add(a, GY, m, [0, d.al*0.5, 0], [d.ar*1.35, d.al*0.95, d.ar*1.35], null, true); },
+  wrists(P, col){ const {d} = P; for (const a of P.arms) add(a, GY, kc(col), [0, -d.al*0.55, 0], [d.ar*1.3, d.al*0.4, d.ar*1.3]); },
+  coat(P, col, len=1){ const {d} = P, h = d.ll*1.3*len; K.shirt(P, col); add(P.torso, GY, kc(col), [0, -d.th*0.75 - h*0.5, 0], [d.tw*1.12, h, d.td*1.22], null, true); },
+  robe(P, col){ const {d} = P, h = d.ll*2 + d.th*1.1; K.shirt(P, col); add(P.torso, GC, kc(col), [0, d.th*0.55 - h*0.5, 0], [d.tw*1.55, h, d.td*1.75], null, true); },
+  skirt(P, col){ const {d} = P; for (let i = 0; i < 12; i++){ const a = i/12*TAU; add(P.torso, GB, kc(col), [Math.sin(a)*d.tw*0.95, -d.th*1.05, Math.cos(a)*d.td*1.05], [0.05*P.s, d.th*0.8, 0.03*P.s], [Math.cos(a)*0.2, a, -Math.sin(a)*0.2]); } },
+  labcoat(P){ K.coat(P, '#f7f7f2', 0.9); const {d, s} = P; for (const sx of [-1, 1]) add(P.torso, GB, kc('#dcdcd4'), [sx*d.tw*0.3, d.th*0.55, fz(P, d.th*0.55)], [d.tw*0.35, d.th*0.6, 0.02*s], [0, 0, sx*0.45]); add(P.torso, GY, kc('#2f5bb8'), [-d.tw*0.55, d.th*0.25, fz(P, d.th*0.25)], [0.015*s, d.th*0.35, 0.015*s]); },
+  cape(P, col, len=1){ const {d, s} = P, m = kc(col); add(P.torso, GB, m, [0, d.th*(0.75 - 1.1*len), -d.td*1.25], [d.tw*2.1, d.th*2.2*len, 0.035*s], [0.14, 0, 0], true); add(P.torso, GY, m, [0, d.th*0.95, -d.td*0.2], [d.tw*0.85, d.th*0.2, d.td*1.0]); },
+  scarf(P, col, long){ const {d, s} = P, m = kc(col); add(P.torso, GY, m, [0, d.th*0.98, 0], [d.tw*0.72, d.th*0.22, d.td*0.95]); for (const sx of long ? [-1, 1] : [1]) add(P.torso, GB, m, [sx*d.tw*0.3, d.th*0.1, -d.td*1.12], [d.tw*0.32, d.th*(long ? 1.9 : 1.2), 0.03*s], [0.2, 0, sx*0.12]); },
+  sash(P, col){ const {d, s} = P, m = kc(col); for (const z of [1, -1]) add(P.torso, GB, m, [0, d.th*0.1, z*d.td*1.3], [d.tw*2.3, 0.1*s, 0.035*s], [0, 0, z*0.75]); },
+  furCollar(P, col){ const {d} = P; for (let i = 0; i < 9; i++){ const a = i/9*TAU; add(P.torso, GS, kc(col), [Math.sin(a)*d.tw*0.85, d.th*0.95, Math.cos(a)*d.td*0.95], [d.tw*0.32, d.th*0.25, d.tw*0.32], null, true); } },
+  buttons(P, col=GOLD, n=3){ const {d, s} = P; for (let i = 0; i < n; i++){ const y = d.th*(0.5 - i*0.3); add(P.torso, GS, kc(col), [0, y, fz(P, y)], [0.035*s, 0.035*s, 0.02*s]); } },
+  tie(P, col){ const {d, s} = P, y = d.th*0.35; add(P.torso, GB, kc(col), [0, y, fz(P, y)], [0.08*s, d.th*0.7, 0.03*s]); },
+  jabot(P){ const {d, s} = P; for (let i = 0; i < 3; i++){ const y = d.th*(0.75 - i*0.15); add(P.torso, GS, kc('#ffffff'), [0, y, fz(P, y)], [0.1*s, 0.05*s, 0.04*s]); } },
+  medals(P, n=3){ const {d, s} = P; for (let i = 0; i < n; i++){ const x = -d.tw*(0.25 + i*0.17), y = d.th*0.4, z = fz(P, y); add(P.torso, GB, kc(['#d9472b', '#2f5bb8', '#2b9a4a', '#f2f2f2'][i % 4]), [x, y + 0.06*s, z], [0.05*s, 0.05*s, 0.02*s]); add(P.torso, GY, kc(GOLD), [x, y - 0.02*s, z + 0.01*s], [0.035*s, 0.015*s, 0.035*s], [Math.PI/2, 0, 0]); } },
+  epaulettes(P){ const {d, s} = P, g = kc(GOLD); for (const sx of [-1, 1]){ add(P.torso, GY, g, [sx*d.tw*1.05, d.th*0.92, 0], [d.tw*0.32, d.th*0.1, d.td*0.85], null, true); for (let i = 0; i < 4; i++) add(P.torso, GY, g, [sx*d.tw*1.25, d.th*0.78, (i - 1.5)*d.td*0.4], [0.012*s, d.th*0.2, 0.012*s]); } },
+  pauldrons(P, col, spike){ const {d} = P; for (const sx of [-1, 1]){ add(P.torso, GS, kc(col), [sx*d.tw*1.05, d.th*0.85, 0], [d.tw*0.45, d.th*0.27, d.td*1.05], [0, 0, -sx*0.35], true); if (spike) add(P.torso, GC, kc(spike), [sx*d.tw*1.22, d.th*1.1, 0], [d.tw*0.12, d.th*0.42, d.tw*0.12], [0, 0, -sx*0.6]); } },
+  chest(P, col, emblem){ const {d, s} = P; add(P.torso, GS, kc(col), [0, d.th*0.25, d.td*0.8], [d.tw*0.97, d.th*0.64, d.td*0.64], null, true); if (emblem) add(P.torso, GS, kc(emblem), [0, d.th*0.3, d.td*1.42], [d.tw*0.22, d.tw*0.22, 0.03*s]); },
+  tassets(P, col){ const {d} = P; for (let i = 0; i < 5; i++){ const a = (i - 2)*0.55; add(P.torso, GB, kc(col), [Math.sin(a)*d.tw*1.05, -d.th*0.95, Math.cos(a)*d.td*1.15], [d.tw*0.42, d.th*0.45, 0.04*P.s], [0.15, a, 0], true); } },
+  bandolier(P, col='#6b4426'){ const {d, s} = P, m = kc(col), g = kc(GOLD); for (const a of [0.75, -0.75]){ add(P.torso, GB, m, [0, d.th*0.15, d.td*1.3], [d.tw*2.3, 0.09*s, 0.04*s], [0, 0, a]); for (let i = -3; i <= 3; i++) if (i) add(P.torso, GB, g, [Math.cos(a)*i*d.tw*0.28, d.th*0.15 + Math.sin(a)*i*d.tw*0.28, d.td*1.35], [0.025*s, 0.06*s, 0.025*s], [0, 0, a]); } },
+  apron(P, col){ const {d, s} = P, m = kc(col); add(P.torso, GB, m, [0, -d.th*0.35, d.td*1.3], [d.tw*1.5, d.th*2.0, 0.04*s], [-0.06, 0, 0], true); add(P.torso, GY, m, [0, d.th*0.95, 0], [d.tw*0.6, 0.02*s, d.td*0.95]); },
+  gi(P, belt){ const {d, s} = P; K.shirt(P, '#f7f7f2'); K.pants(P, '#f7f7f2', 1.15); for (const sx of [-1, 1]) add(P.torso, GB, kc('#cfcfc8'), [sx*d.tw*0.25, d.th*0.45, fz(P, d.th*0.45)], [0.04*s, d.th*0.9, 0.02*s], [0, 0, -sx*0.5]); K.belt(P, belt, null); for (const sx of [-1, 1]) add(P.torso, GB, kc(belt), [sx*d.tw*0.2, -d.th*0.85, d.td*1.22], [0.06*s, d.th*0.45, 0.02*s], [0, 0, sx*0.25]); },
+  bib(P){ const {d, s} = P, y = d.th*0.15, z = fz(P, y); add(P.torso, GB, kc('#ffffff'), [0, y, z + 0.01*s], [d.tw*0.9, d.th*0.65, 0.02*s]); add(P.torso, GB, kc('#d9472b'), [0, y, z + 0.025*s], [d.tw*0.35, d.th*0.3, 0.02*s]); },
+  necklace(P, col, teeth){ const {d, s} = P; for (let i = 0; i < 9; i++){ const a = (i/8 - 0.5)*2.4, y = d.th*(0.92 - Math.cos(a)*0.22); const pos = [Math.sin(a)*d.tw*0.8, y, Math.cos(a)*d.td*1.15];
+    if (teeth) add(P.torso, GC, kc('#fffaf0'), pos, [0.03*s, 0.1*s, 0.03*s], [Math.PI, 0, 0]); else add(P.torso, GS, kc(col), pos, [0.045*s, 0.045*s, 0.045*s]); } },
+  backpack(P, col){ const {d} = P; add(P.torso, GB, kc(col), [0, d.th*0.2, -d.td*1.45], [d.tw*1.2, d.th*1.3, d.td*0.7], null, true); add(P.torso, GB, kc('#3a2a1c'), [0, d.th*0.6, -d.td*1.1], [d.tw*1.25, d.th*0.3, d.td*0.75]); },
+  jetpack(P){ const {d, s} = P; for (const sx of [-1, 1]){ add(P.torso, GY, kc('#9aa3b5'), [sx*d.tw*0.35, d.th*0.2, -d.td*1.45], [d.tw*0.3, d.th*1.3, d.tw*0.3], null, true); add(P.torso, GC, emberMat, [sx*d.tw*0.35, -d.th*0.75, -d.td*1.45], [d.tw*0.2, d.th*0.5, d.tw*0.2], [Math.PI, 0, 0]); } add(P.torso, GB, kc('#d9472b'), [0, d.th*0.3, -d.td*1.4], [d.tw*0.4, d.th*0.6, 0.05*s]); },
+  pouches(P, col){ const {d, s} = P; for (const sx of [-1, 1]) add(P.torso, GB, kc(col), [sx*d.tw*0.75, -d.th*0.7, d.td*0.95], [0.12*s, 0.14*s, 0.08*s], [0, sx*0.6, 0], true); },
+  // ---- cabeça
+  helmet(P, col, brim=true){ const {r} = P, m = kc(col); add(P.head, GHEMI, m, [0, 0.42*r, -0.05*r], [1.1*r, 0.85*r, 1.1*r], null, true); if (brim) add(P.head, GY, m, [0, 0.42*r, 0], [1.18*r, 0.06*r, 1.18*r]); },
+  generalCap(P, col){ const {r} = P, m = kc(col); add(P.head, GY, m, [0, 0.8*r, 0], [0.78*r, 0.32*r, 0.8*r], null, true); add(P.head, GY, m, [0, 0.98*r, 0.05*r], [0.95*r, 0.1*r, 1.0*r], null, true);
+    add(P.head, GS, kc('#1f1d22'), [0, 0.68*r, 0.72*r], [0.55*r, 0.05*r, 0.35*r]); ring(P, GOLD, 0.68, 0.08, 1.03); add(P.head, GOCT, kc(GOLD), [0, 0.85*r, 0.8*r], [0.12*r, 0.12*r, 0.04*r]); },
+  kabuto(P, col){ const {r} = P, m = kc(col); K.helmet(P, col, false); for (const sx of [-1, 1]){ add(P.head, GB, m, [sx*0.95*r, 0.3*r, -0.15*r], [0.12*r, 0.5*r, 0.85*r], [0, 0, sx*0.45], true); add(P.head, GC, kc(GOLD), [sx*0.32*r, 1.15*r, 0.6*r], [0.08*r, 0.85*r, 0.05*r], [0.2, 0, -sx*0.55], true); } add(P.head, GY, kc(GOLD), [0, 0.8*r, 0.85*r], [0.14*r, 0.04*r, 0.14*r], [Math.PI/2, 0, 0]); },
+  viking(P, col, horn='#efe6cf'){ const {r} = P; K.helmet(P, col, false); ring(P, GOLD, 0.45, 0.1, 1.12); for (const sx of [-1, 1]) add(P.head, GC, kc(horn), [sx*1.12*r, 0.95*r, 0.1*r], [0.22*r, 1.05*r, 0.22*r], [0.15, 0, -sx*0.7], true); add(P.head, GB, kc(col), [0, 0.3*r, 1.0*r], [0.08*r, 0.45*r, 0.06*r]); },
+  knight(P, col, plume){ const {r} = P, m = kc(col); K.helmet(P, col, false); for (const sx of [-1, 1]) add(P.head, GB, m, [sx*0.82*r, 0.05*r, 0.35*r], [0.12*r, 0.6*r, 0.5*r], [0, sx*0.4, 0], true);
+    for (let i = 0; i < 5; i++) add(P.head, GS, kc(plume), [0, (1.3 - Math.abs(i - 1)*0.08)*r, (0.4 - i*0.3)*r], [0.13*r, 0.3*r, 0.22*r], [-0.4 + i*0.25, 0, 0], true); },
+  crown(P, col=GOLD){ const {r} = P, cr = new T.Group(); cr.position.set(0, 0.88*r, -0.05*r); cr.rotation.x = -0.12; P.head.add(cr);
+    add(cr, GY, kc(col), [0, 0, 0], [0.55*r, 0.22*r, 0.55*r], null, true);
+    for (let i = 0; i < 5; i++){ const a = i/5*TAU; add(cr, GC, kc(col), [Math.sin(a)*0.5*r, 0.25*r, Math.cos(a)*0.5*r], [0.12*r, 0.32*r, 0.12*r], null, true); add(cr, GS, kc(i % 2 ? '#3b64d6' : '#d9472b'), [Math.sin(a)*0.56*r, 0, Math.cos(a)*0.56*r], [0.07*r, 0.07*r, 0.07*r]); } },
+  laurel(P, col){ const {r} = P; for (let i = 0; i < 14; i++){ const a = i/14*TAU; if (Math.abs(wrapA(a)) < 0.35) continue; add(P.head, GS, kc(col), [Math.sin(a)*0.92*r, 0.55*r, Math.cos(a)*0.92*r], [0.11*r, 0.06*r, 0.22*r], [0, a, 0.5]); } },
+  wizardHat(P, col, star){ const {r} = P, hat = new T.Group(); hat.position.set(0, 0.72*r, -0.05*r); hat.rotation.set(-0.15, 0, 0.12); P.head.add(hat);
+    add(hat, GY, kc(col), [0, 0, 0], [1.05*r, 0.06*r, 1.05*r], null, true); add(hat, GC, kc(col), [0, 0.7*r, 0], [0.62*r, 1.4*r, 0.62*r], [0, 0, 0.1], true); add(hat, GY, kc(GOLD), [0, 0.1*r, 0], [0.63*r, 0.12*r, 0.63*r]);
+    if (star) add(hat, GOCT, haloMat, [0.1*r, 0.6*r, 0.45*r], [0.12*r, 0.12*r, 0.04*r]); },
+  hood(P, col){ const {r} = P; add(P.head, GHEMI, kc(col), [0, 0.15*r, -0.25*r], [1.15*r, 1.05*r, 1.05*r], [-0.25, 0, 0], true); add(P.head, GC, kc(col), [0, 0.95*r, -0.75*r], [0.3*r, 0.6*r, 0.3*r], [-1.2, 0, 0], true); },
+  cangaceiro(P, big){ const {r} = P, k = big ? 1.3 : 1, m = kc('#8a5a30');
+    add(P.head, GHEMI, m, [0, 0.5*r, -0.05*r], [0.88*r, 0.7*r, 0.88*r], null, true); ring(P, '#d9472b', 0.52, 0.09, 0.9);
+    add(P.head, GS, m, [0, 1.0*r, 0.3*r], [1.3*k*r, 0.78*k*r, 0.12*r], [-0.08, 0, 0], true);   // aba virada pra cima: a meia-lua do cangaço
+    const stars = big ? [-2, -1, 0, 1, 2] : [-1, 0, 1];
+    for (const i of stars) add(P.head, GOCT, kc(GOLD), [i*0.38*r, (1.05 + (i ? 0 : 0.15))*k*r, 0.38*r], [0.09*r, 0.09*r, 0.03*r]);
+    if (big) for (let i = 0; i < 7; i++) add(P.head, GS, kc(GOLD), [(i - 3)*0.28*r, (0.7 + Math.cos((i - 3)*0.4)*0.15)*k*r, 0.4*r], [0.04*r, 0.04*r, 0.02*r]); },
+  cowboy(P, col){ const {r} = P, m = kc(col); add(P.head, GY, m, [0, 0.82*r, 0], [0.7*r, 0.45*r, 0.72*r], null, true); add(P.head, GY, m, [0, 0.65*r, 0], [1.4*r, 0.05*r, 1.4*r], [-0.12, 0, 0], true); ring(P, '#3a2618', 0.68, 0.08, 0.72);
+    for (const sx of [-1, 1]) add(P.head, GC, m, [sx*1.2*r, 0.78*r, 0.2*r], [0.2*r, 0.3*r, 0.4*r], [0, 0, sx*0.6]); },
+  straw(P){ const {r} = P; add(P.head, GC, kc('#d8b86a'), [0, 1.0*r, 0], [1.6*r, 0.55*r, 1.6*r], null, true); add(P.head, GY, kc('#8a5a30'), [0, 0.78*r, 0], [0.6*r, 0.06*r, 0.6*r]); },
+  gradCap(P){ const {r} = P, m = kc('#1f1d22'); add(P.head, GY, m, [0, 0.82*r, 0], [0.72*r, 0.35*r, 0.72*r], null, true); add(P.head, GB, m, [0, 1.02*r, 0], [1.45*r, 0.06*r, 1.45*r], [0, Math.PI/4, 0], true);
+    add(P.head, GS, kc(GOLD), [0, 1.07*r, 0], [0.08*r, 0.05*r, 0.08*r]); add(P.head, GY, kc(GOLD), [0.75*r, 0.82*r, 0], [0.03*r, 0.4*r, 0.03*r]); },
+  wig(P){ const {r} = P, m = kc('#f4f4f4'); add(P.head, GHEMI, m, [0, 0.5*r, -0.05*r], [1.05*r, 0.7*r, 1.05*r], null, true);
+    for (let row = 0; row < 3; row++) for (const a of [-2.5, -1.9, -1.35, 1.35, 1.9, 2.5, Math.PI]) add(P.head, GS, m, [Math.sin(a)*0.98*r, (0.45 - row*0.38)*r, Math.cos(a)*0.98*r], [0.27*r, 0.22*r, 0.27*r], null, true); },
+  headband(P, col, tails, y=0.38){ const {r} = P; ring(P, col, y); if (tails) for (const sx of [-1, 1]) add(P.head, GB, kc(col), [sx*0.12*r, (y - 0.15)*r, -1.0*r], [0.14*r, 0.6*r, 0.03*r], [0.5, 0, sx*0.4]); },
+  headgear(P, col){ const {r} = P; K.helmet(P, col, false); for (const sx of [-1, 1]) add(P.head, GS, kc(col), [sx*0.9*r, 0.05*r, 0.1*r], [0.2*r, 0.45*r, 0.4*r], null, true); },
+  ninjaMask(P, col){ const {r, mouth} = P; add(P.head, GY, kc(col), [0, mouth.y*0.6, 0.08*r], [1.06*r, 0.6*r, 1.06*r]); add(P.head, GS, kc(col), [0, mouth.y + 0.05*r, mouth.z*0.92], [0.5*r, 0.35*r, 0.3*r]); },
+  domino(P, col){ const {r, eye} = P; add(P.head, GB, kc(col), [0, eye.y, eye.z + eye.R*0.55], [eye.x*2 + eye.R*2.2, eye.R*1.3, 0.05*r]); for (const sx of [-1, 1]) add(P.head, GC, kc(col), [sx*(eye.x + eye.R*1.3), eye.y + eye.R*0.4, eye.z], [0.08*r, 0.3*r, 0.04*r], [0, 0, -sx*1.0]); },
+  luchador(P, col, trim){ const {r, eye} = P; add(P.head, GHEMI, kc(col), [0, 0.15*r, -0.05*r], [1.06*r, 0.95*r, 1.06*r], null, true); add(P.head, GB, kc(trim), [0, 0.95*r, 0], [0.1*r, 0.12*r, 1.3*r], [0.3, 0, 0]);
+    for (const sx of [-1, 1]) add(P.head, GTOR, kc(trim), [sx*eye.x, eye.y, eye.z + eye.R*0.6], [eye.R*1.15, eye.R*1.15, eye.R*1.15]); },
+  goggles(P, col){ const {r} = P; ring(P, col, 0.55, 0.12); for (const sx of [-1, 1]){ add(P.head, GY, kc('#c98a3a'), [sx*0.32*r, 0.62*r, 0.8*r], [0.27*r, 0.16*r, 0.27*r], [Math.PI/2 - 0.45, 0, 0], true); add(P.head, GY, glassMat, [sx*0.32*r, 0.67*r, 0.88*r], [0.21*r, 0.04*r, 0.21*r], [Math.PI/2 - 0.45, 0, 0]); } },
+  propeller(P){ const {r} = P; add(P.head, GHEMI, kc('#2f5bb8'), [0, 0.6*r, -0.05*r], [0.75*r, 0.5*r, 0.75*r], null, true); add(P.head, GY, kc(GOLD), [0, 1.15*r, -0.05*r], [0.04*r, 0.2*r, 0.04*r]);
+    for (const a of [0, Math.PI/2]) add(P.head, GB, kc('#d9472b'), [0, 1.25*r, -0.05*r], [0.95*r, 0.03*r, 0.14*r], [0, a + 0.3, 0], true); },
+  glasses(P, col, dark){ const {r, eye} = P, z = eye.z + eye.R*0.85; for (const sx of [-1, 1]){ add(P.head, GTOR, kc(col), [sx*eye.x, eye.y, z], [eye.R*1.05, eye.R*1.05, eye.R*1.05]); if (dark) add(P.head, GY, kc('#1f1d22'), [sx*eye.x, eye.y, z - 0.01*r], [eye.R*0.95, 0.02*r, eye.R*0.95], [Math.PI/2, 0, 0]); }
+    add(P.head, GB, kc(col), [0, eye.y, z], [Math.max(0.01, eye.x*2 - eye.R*2.1), 0.03*r, 0.03*r]); },
+  monocle(P){ const {r, eye} = P, z = eye.z + eye.R*0.85; add(P.head, GTOR, kc(GOLD), [eye.x, eye.y, z], [eye.R*1.1, eye.R*1.1, eye.R*1.1]); add(P.head, GY, kc(GOLD), [eye.x + eye.R*0.8, eye.y - eye.R*1.6, z - 0.1*r], [0.012*r, eye.R*2.2, 0.012*r], [0, 0, 0.3]); },
+  beard(P, col, len=1){ const {r, mouth} = P; add(P.head, GC, kc(col), [0, mouth.y - 0.6*r*len, mouth.z*0.92], [0.42*r, 1.0*r*len, 0.3*r], [Math.PI + 0.3, 0, 0], true); },
+  mustache(P, col){ const {r, mouth} = P; for (const sx of [-1, 1]) add(P.head, GS, kc(col), [sx*0.2*r, mouth.y + 0.12*r, mouth.z + 0.04*r], [0.22*r, 0.07*r, 0.08*r], [0, 0, sx*0.35], true); },
+  brows(P, col){ const {r, eye} = P; for (const sx of [-1, 1]) add(P.head, GS, kc(col), [sx*(eye.x + 0.08*r), eye.y + eye.R*1.15, eye.z + eye.R*0.5], [0.34*r, 0.1*r, 0.14*r], [0, 0, -sx*0.4], true); },
+  cocar(P, cols){ const {r} = P; ring(P, '#d9472b', 0.45, 0.14); for (let i = 0; i < 11; i++){ const a = (i/10 - 0.5)*2.8; add(P.head, GC, kc(cols[i % cols.length]), [Math.sin(a)*0.8*r, (0.95 + Math.cos(a)*0.35)*r, -0.35*r], [0.11*r, 0.85*r, 0.04*r], [-0.35, 0, -a*0.8], true); } },
+  turban(P, col, jewel){ const {r} = P; for (const y of [0.5, 0.72]) add(P.head, GTOR, kc(col), [0, y*r, 0], [0.88*r, 0.88*r, 1.6*r], [Math.PI/2, 0, 0], true); add(P.head, GHEMI, kc(col), [0, 0.72*r, 0], [0.85*r, 0.6*r, 0.85*r], null, true);
+    add(P.head, GOCT, kc(jewel), [0, 0.68*r, 0.95*r], [0.12*r, 0.16*r, 0.06*r]); },
+  horns(P, col, n=2, len=0.7){ const {r} = P; for (let i = 0; i < n; i++){ const sx = i % 2 ? 1 : -1, k = i >> 1; add(P.head, GC, kc(col), [sx*(0.45 + k*0.2)*r, (0.8 - k*0.2)*r, (-0.25 - k*0.25)*r], [0.13*r, len*(1 + k*0.2)*r, 0.13*r], [-0.6 - k*0.3, 0, -sx*(0.5 + k*0.3)], true); } },
+  halo(P, mat, back){ const {r} = P; if (back) add(P.head, GY, mat, [0, 0.35*r, -0.95*r], [1.5*r, 0.03*r, 1.5*r], [Math.PI/2, 0, 0]); else add(P.head, GTOR, mat, [0, 1.35*r, -0.15*r], [0.6*r, 0.6*r, 0.6*r], [Math.PI/2, 0, 0]); },
+  mane(P, col){ const {d, s, r} = P; for (let i = 0; i < 11; i++){ const a = i/11*TAU; add(P.torso, GC, kc(col), [Math.sin(a)*d.tw*0.95, d.th*0.9, Math.cos(a)*d.td*1.05], [0.09*s, 0.35*s, 0.09*s], [Math.cos(a)*0.7, 0, -Math.sin(a)*0.7], true); }
+    for (let i = 0; i < 3; i++) add(P.head, GC, kc(col), [(i - 1)*0.3*r, 0.9*r, -0.2*r], [0.12*r, 0.45*r, 0.12*r], [-0.3, 0, (i - 1)*0.4], true); },
+  cheeks(P, col){ const {r, eye} = P; for (const sx of [-1, 1]) for (let i = 0; i < 2; i++) add(P.head, GB, kc(col), [sx*(eye.x + 0.1*r), eye.y - eye.R*1.5 - i*0.12*r, eye.z*0.85], [0.28*r, 0.05*r, 0.05*r], [0, sx*0.6, sx*0.2]); },
+  // ---- na mão (i: 0 esquerda, 1 direita)
+  sword(P, i=1, blade='#dfe6ee', len=1.5, guard=GOLD){ const {d, s} = P, a = P.arms[i], L = d.al*len;
+    add(a, GY, kc('#4a2c14'), [0, -d.al, d.al*0.05], [0.035*s, d.al*0.45, 0.035*s], [Math.PI/2, 0, 0]); add(a, GB, kc(guard), [0, -d.al, d.al*0.3], [0.2*s, 0.04*s, 0.05*s]);
+    add(a, GB, kc(blade), [0, -d.al, d.al*0.32 + L/2], [0.06*s, 0.018*s, L], null, true); },
+  katana(P, i=1){ const {d, s} = P, a = P.arms[i], L = d.al*1.9; add(a, GY, kc('#1f1d22'), [0, -d.al, d.al*0.05], [0.03*s, d.al*0.55, 0.03*s], [Math.PI/2, 0, 0]);
+    add(a, GY, kc(GOLD), [0, -d.al, d.al*0.35], [0.08*s, 0.015*s, 0.08*s], [Math.PI/2, 0, 0]); add(a, GB, kc('#eef3f8'), [0, -d.al + 0.02*s, d.al*0.37 + L/2], [0.025*s, 0.045*s, L], [-0.06, 0, 0], true); },
+  machete(P, i=1){ const {d, s} = P, a = P.arms[i], L = d.al*1.0; add(a, GY, kc('#4a2c14'), [0, -d.al, d.al*0.05], [0.04*s, d.al*0.45, 0.04*s], [Math.PI/2, 0, 0]);
+    add(a, GB, kc('#c9ccd6'), [0, -d.al - 0.02*s, d.al*0.3 + L/2], [0.02*s, 0.1*s, L], null, true); },
+  axe(P, i=1, double){ const {d, s} = P, a = P.arms[i], L = d.al*2.2; add(a, GY, kc('#6b4426'), [0, -d.al, L*0.35], [0.035*s, L, 0.035*s], [Math.PI/2, 0, 0], true);
+    for (const sy of double ? [-1, 1] : [1]) add(a, GS, kc('#c9ccd6'), [0, -d.al + sy*0.2*s, L*0.8], [0.03*s, 0.24*s, 0.2*s], null, true); },
+  hammer(P, i=1, head='#5a5148', big=1){ const {d, s} = P, a = P.arms[i], L = d.al*1.7*big; add(a, GY, kc('#6b4426'), [0, -d.al, L*0.35], [0.04*s*big, L, 0.04*s*big], [Math.PI/2, 0, 0], true);
+    add(a, GB, kc(head), [0, -d.al, L*0.85], [0.18*s*big, 0.34*s*big, 0.2*s*big], null, true); },
+  lance(P, i=1, col='#c9ccd6'){ const {d, s} = P, a = P.arms[i], L = d.al*3.2; add(a, GY, kc('#6b4426'), [0, -d.al, L*0.3], [0.03*s, L, 0.03*s], [Math.PI/2, 0, 0], true);
+    add(a, GC, kc(col), [0, -d.al, L*0.8 + 0.1*s], [0.07*s, 0.3*s, 0.07*s], [Math.PI/2, 0, 0], true); add(a, GC, kc(col), [0, -d.al, d.al*0.15], [0.12*s, 0.25*s, 0.12*s], [-Math.PI/2, 0, 0], true); },
+  trident(P, i=1){ const {d, s} = P, a = P.arms[i], L = d.al*3; add(a, GY, kc(GOLD), [0, -d.al, L*0.3], [0.03*s, L, 0.03*s], [Math.PI/2, 0, 0], true);
+    add(a, GB, kc(GOLD), [0, -d.al, L*0.8], [0.3*s, 0.03*s, 0.03*s]); for (const x of [-1, 0, 1]) add(a, GC, kc(GOLD), [x*0.14*s, -d.al, L*0.8 + 0.12*s], [0.03*s, 0.24*s, 0.03*s], [Math.PI/2, 0, 0], true); },
+  staff(P, i=1, col='#6b4426', orb=emberMat){ const {d, s} = P, a = P.arms[i]; add(a, GY, kc(col), [0, -d.al, d.al*0.35], [0.03*s, d.al*3.2, 0.03*s], [Math.PI/2, 0, 0], true); if (orb) add(a, GS, orb, [0, -d.al, d.al*2.0], [0.09*s, 0.09*s, 0.09*s], null, true); },
+  scepter(P, i=1, orb=haloMat){ const {d, s} = P, a = P.arms[i]; add(a, GY, kc(GOLD), [0, -d.al, d.al*0.5], [0.025*s, d.al*1.4, 0.025*s], [Math.PI/2, 0, 0], true); add(a, GS, orb, [0, -d.al, d.al*1.25], [0.08*s, 0.08*s, 0.08*s], null, true); add(a, GOCT, kc(GOLD), [0, -d.al, d.al*1.38], [0.04*s, 0.07*s, 0.04*s]); },
+  gavel(P, i=1){ const {d, s} = P, a = P.arms[i]; add(a, GY, kc('#6b4426'), [0, -d.al, d.al*0.35], [0.025*s, d.al*0.9, 0.025*s], [Math.PI/2, 0, 0], true); add(a, GY, kc('#6b4426'), [0, -d.al, d.al*0.8], [0.06*s, 0.22*s, 0.06*s], null, true); },
+  book(P, i=0, col='#8a1f2a'){ const {d, s} = P, a = P.arms[i]; add(a, GB, kc(col), [0, -d.al*1.05, d.ar*1.6], [0.26*s, 0.32*s, 0.08*s], null, true); add(a, GB, kc('#fffaf0'), [0, -d.al*1.05, d.ar*1.6], [0.24*s, 0.3*s, 0.085*s]); },
+  scroll(P, i=1){ const {d, s} = P, a = P.arms[i]; add(a, GY, kc('#fffaf0'), [0, -d.al, d.ar*1.4], [0.06*s, 0.32*s, 0.06*s], [0, 0, Math.PI/2], true); for (const sx of [-1, 1]) add(a, GS, kc('#6b4426'), [sx*0.17*s, -d.al, d.ar*1.4], [0.04*s, 0.04*s, 0.04*s]); },
+  fan(P, i=0, col){ const {d, s} = P, a = P.arms[i]; add(a, GS, kc(col), [0, -d.al - 0.1*s, d.ar*1.5], [0.25*s, 0.18*s, 0.02*s], null, true); add(a, GB, kc('#1f1d22'), [0, -d.al - 0.05*s, d.ar*1.55], [0.02*s, 0.18*s, 0.025*s]); },
+  shield(P, i=0, col, emblem=GOLD, big=1){ const {d, s} = P, a = P.arms[i], sx = i ? 1 : -1, R = d.al*0.75*big; add(a, GY, kc(col), [sx*d.ar*1.8, -d.al*0.4, d.ar*0.5], [R, 0.07*s, R], [0, 0, Math.PI/2], true);
+    add(a, GY, kc(emblem), [sx*(d.ar*1.8 + 0.04*s), -d.al*0.4, d.ar*0.5], [R*0.35, 0.07*s, R*0.35], [0, 0, Math.PI/2]); },
+  gloves(P, col){ const {d} = P; for (const a of P.arms) add(a, GS, kc(col), [0, -d.al*1.05, d.ar*0.2], [d.ar*2.2, d.ar*2.2, d.ar*2.4], null, true); },
+  claws(P){ const {d, s} = P; for (const a of P.arms) for (const x of [-1, 0, 1]) add(a, GC, kc('#fffaf0'), [x*d.ar*0.6, -d.al*1.35, d.ar*0.6], [0.025*s, 0.12*s, 0.025*s], [Math.PI - 0.4, 0, 0]); },
+  tube(P, i=1){ const {d, s} = P, a = P.arms[i]; add(a, GY, glassMat, [0, -d.al*0.95, d.ar*1.6], [0.06*s, 0.3*s, 0.06*s], [0.4, 0, 0]); add(a, GY, new T.MeshBasicMaterial({color:'#7ac74f'}), [0, -d.al*0.95 - 0.04*s, d.ar*1.6 - 0.02*s], [0.05*s, 0.18*s, 0.05*s], [0.4, 0, 0]); },
+  wrench(P, i=1){ const {d, s} = P, a = P.arms[i]; add(a, GY, kc('#9aa3b5'), [0, -d.al, d.al*0.35], [0.03*s, d.al*1.0, 0.03*s], [Math.PI/2, 0, 0], true); add(a, GTOR, kc('#9aa3b5'), [0, -d.al, d.al*0.9], [0.08*s, 0.08*s, 0.08*s], [Math.PI/2, 0, 0]); },
+  rattle(P, i=1){ const {d, s} = P, a = P.arms[i]; add(a, GY, kc('#6b4426'), [0, -d.al, d.al*0.25], [0.025*s, d.al*0.6, 0.025*s], [Math.PI/2, 0, 0]); add(a, GS, kc('#c98a3a'), [0, -d.al, d.al*0.65], [0.12*s, 0.12*s, 0.15*s], null, true);
+    for (const col of ['#d9472b', '#2b9a4a']) add(a, GC, kc(col), [0, -d.al + 0.1*s, d.al*0.7], [0.03*s, 0.18*s, 0.02*s], [-0.3, 0, col === '#d9472b' ? 0.4 : -0.4]); },
+  berimbau(P, i=1){ const {d, s} = P, a = P.arms[i], L = d.al*3.4; add(a, GY, kc('#8a5a30'), [0, -d.al + 0.05*s, d.al*0.2], [0.025*s, L, 0.025*s], [0.25, 0, 0], true);
+    add(a, GS, kc('#c98a3a'), [0, -d.al - 0.08*s, d.al*0.1], [0.15*s, 0.15*s, 0.15*s], null, true); add(a, GY, kc('#dcdcd4'), [0, -d.al + 0.12*s, d.al*0.25], [0.006*s, L*0.95, 0.006*s], [0.25, 0, 0]); },
+  lasso(P){ const {d, s} = P; add(P.torso, GTOR, kc('#c9a86a'), [d.tw*1.0, -d.th*0.6, 0.05*s], [0.22*s, 0.22*s, 0.4*s], [0, Math.PI/2, 0]); },
+  shuriken(P){ const {d, s} = P; for (const sx of [-1, 1]) add(P.torso, GOCT, kc('#9aa3b5'), [sx*d.tw*0.6, -d.th*0.55, d.td*1.15], [0.1*s, 0.1*s, 0.02*s], [0, 0, 0.6]); },
+  // ---- efeitos no corpo
+  wings(P, mat, tip, span, bat){ const {c, d} = P; c.wingsBack = mythWings(c, P.torso, kc(mat), kc(tip), d.tw*span, bat, [d.tw*0.45, d.th*0.55, -d.td*1.15]); },
+  tails(P, n, col, tip){ const {d, s} = P; for (let i = 0; i < n; i++){ const a = (i/(n - 1) - 0.5)*2.8, g = new T.Group(); g.position.set(0, -d.th*0.55, -d.td*1.05); g.rotation.set(-0.7, 0, a); P.torso.add(g);
+      const L = d.th*1.6; add(g, GS, kc(col), [0, L*0.5, 0], [d.tw*0.26, L*0.55, d.tw*0.26], null, true); add(g, GS, kc(tip), [0, L*0.98, 0], [d.tw*0.2, L*0.18, d.tw*0.2]); } },
+  flames(P, mat=emberMat){ const {d, s} = P; for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) add(P.torso, GC, mat, [sx*d.tw*(0.9 + i*0.12), d.th*(1.05 + (i % 2)*0.1), (i - 1)*d.td*0.4], [0.07*s, (0.3 - i*0.05)*s, 0.07*s], [0, 0, -sx*0.25]); },
+  lava(P){ const {d, s} = P; for (let i = 0; i < 9; i++){ const a = rand(-1.3, 1.3); add(P.torso, GB, emberMat, [Math.sin(a)*d.tw*1.24, Math.cos(a)*d.th*0.9, rand(-0.6, 0.6)*d.td*1.2], [0.03*s, rand(0.12, 0.25)*s, 0.03*s], [rand(-0.5, 0.5), 0, a]); } },
+  ice(P){ const {d, s} = P; for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) add(P.torso, GOCT, iceMat, [sx*d.tw*(1.0 + i*0.12), d.th*(1.0 + i*0.15), (i - 1)*d.td*0.5], [0.07*s, (0.22 + i*0.06)*s, 0.07*s], [0, 0, -sx*0.4]);
+    for (let i = 0; i < 4; i++) add(P.torso, GOCT, iceMat, [(i - 1.5)*d.tw*0.4, d.th*0.6, -d.td*1.3], [0.07*s, 0.25*s, 0.07*s], [-0.6, 0, 0]); },
+  bolts(P){ const {d, s} = P, y = d.th*0.3, z = fz(P, y) + 0.01*s; add(P.torso, GB, stormMat, [-0.02*s, y + 0.06*s, z], [0.06*s, 0.16*s, 0.02*s], [0, 0, 0.5]); add(P.torso, GB, stormMat, [0.02*s, y - 0.06*s, z], [0.06*s, 0.16*s, 0.02*s], [0, 0, 0.5]);
+    for (const a of P.arms) for (let i = 0; i < 2; i++) add(a, GB, stormMat, [0, -d.al*(0.2 + i*0.5), d.ar*1.1], [0.03*s, d.al*0.35, 0.02*s], [0, 0, i ? -0.5 : 0.5]); },
+  orbs(P, mat, n=3){ const {d, s} = P; for (let i = 0; i < n; i++){ const a = i/n*TAU + 0.5; add(P.torso, GS, mat, [Math.cos(a)*d.tw*1.9, d.th*(0.8 + (i % 2)*0.5), Math.sin(a)*d.td*2.2], [0.07*s, 0.07*s, 0.07*s]); } },
+  foxfire(P){ const {d, s} = P; for (let i = 0; i < 5; i++){ const a = i/5*TAU; add(P.torso, GC, foxfireMat, [Math.cos(a)*d.tw*2.0, d.th*(0.6 + (i % 2)*0.6), Math.sin(a)*d.td*2.4], [0.07*s, 0.2*s, 0.07*s]); } },
+  rocks(P){ const {d, s} = P; for (const sx of [-1, 1]) add(P.torso, GOCT, kc('#8f887b'), [sx*d.tw*1.15, d.th*1.1, -d.td*0.3], [0.12*s, 0.14*s, 0.12*s], [0.4, 0.3, sx*0.5], true); add(P.torso, GOCT, kc('#8f887b'), [0, d.th*0.7, -d.td*1.4], [0.16*s, 0.18*s, 0.12*s], [0.3, 0.5, 0], true); },
+  paint(P, col){ const {d, s} = P; for (let i = 0; i < 3; i++){ const y = d.th*(0.5 - i*0.25); for (const sx of [-1, 1]) add(P.torso, GB, kc(col), [sx*d.tw*0.45, y, fz(P, y)], [d.tw*0.4, 0.04*s, 0.02*s], [0, sx*0.35, sx*0.2]); } }
 };
-function addGear(c, torso, head, arms, legs){
-  const sp = c.sp, st = sp.stage, d = c.d, r = d.hr, s = c.s, G = GEAR[sp.attr];
-  const cloth = toon(G.cloth), pants = toon(G.pants), metal = toon(G.metal), gold = toon('#f2c230'), belt = toon('#3a2618');
-  // shorts, cinto com fivela e munhequeiras
-  for (const g of legs) add(g, GY, pants, [0, d.ll*0.45, 0], [d.lr*1.3, d.ll*1.1, d.lr*1.3], null, true);
-  add(torso, GY, pants, [0, -d.th*0.82, 0], [d.tw*0.98, d.th*0.4, d.td*1.05]);
-  add(torso, GY, belt, [0, -d.th*0.55, 0], [d.tw*1.1, d.th*0.18, d.td*1.2]);
-  add(torso, GB, gold, [0, -d.th*0.55, d.td*1.2], [d.tw*0.36, d.th*0.24, 0.035*s]);
-  for (const a of arms) add(a, GY, st > 1 && sp.attr === 'forca' ? metal : cloth, [0, -d.al*0.5, 0], [d.ar*1.28, d.al*0.42, d.ar*1.28]);
-  // aves evoluídas trocam a asa por braço, mas as asas continuam nas costas
-  if (sp.bird) for (const sx of [-1, 1]) add(torso, GS, toon(sp.dark), [sx*d.tw*0.85, d.th*0.35, -d.td*1.15], [d.tw*0.28, d.th*1.25, d.td*0.22], [0.35, 0, sx*0.55], true);
-  const band = (mat, y) => add(head, GY, mat, [0, y*r, 0], [Math.sqrt(1 - y*y)*1.04*r, 0.17*r, Math.sqrt(1 - y*y)*1.04*r]);
-  if (sp.attr === 'forca'){
-    // ombreiras (com espinho no Mestre)
-    for (const sx of [-1, 1]){
-      add(torso, GS, metal, [sx*d.tw*1.05, d.th*0.85, 0], [d.tw*0.42, d.th*0.24, d.td*1.0], [0, 0, -sx*0.35], true);
-      if (st > 1) add(torso, GC, gold, [sx*d.tw*1.22, d.th*1.08, 0], [d.tw*0.12, d.th*0.4, d.tw*0.12], [0, 0, -sx*0.6]);
-    }
-    if (st > 1){
-      add(torso, GS, metal, [0, d.th*0.25, d.td*0.8], [d.tw*0.95, d.th*0.62, d.td*0.62], null, true);
-      add(torso, GS, gold, [0, d.th*0.3, d.td*1.4], [d.tw*0.22, d.tw*0.22, 0.03*s]);
-      band(metal, 0.42);
-      for (const sx of [-1, 1]) add(head, GC, gold, [sx*0.82*r, 0.62*r, 0.1*r], [0.12*r, 0.55*r, 0.12*r], [0, 0, -sx*0.75], true);
-    }
-  } else if (sp.attr === 'agilidade'){
-    // faixa na testa com pontas soltas e lenço no pescoço
-    band(cloth, 0.38);
-    for (const sx of [-1, 1]) add(head, GB, cloth, [sx*0.12*r, 0.2*r, -1.0*r], [0.14*r, 0.55*r, 0.03*r], [0.5, 0, sx*0.4]);
-    add(torso, GY, cloth, [0, d.th*0.98, 0], [d.tw*0.72, d.th*0.22, d.td*0.95]);
-    const tails = st > 1 ? [-1, 1] : [1];
-    for (const sx of tails) add(torso, GB, cloth, [sx*d.tw*0.3, d.th*0.1, -d.td*1.12], [d.tw*0.32, d.th*(st > 1 ? 1.9 : 1.2), 0.03*s], [0.2, 0, sx*0.12]);
-    if (st > 1){
-      // espada atravessada nas costas
-      add(torso, GB, toon('#1f1d22'), [0, d.th*0.4, -d.td*1.3], [0.05*s, d.th*2.6, 0.035*s], [0, 0, 0.75], true);
-      add(torso, GB, gold, [-d.tw*0.42, d.th*0.88, -d.td*1.3], [0.14*s, 0.035*s, 0.05*s], [0, 0, 0.75]);
-      for (const g of legs) add(g, GY, metal, [0, -d.ll*0.35, 0], [d.lr*1.25, d.ll*0.45, d.lr*1.25]);
-    }
-  } else {
-    // capa e gola; o Mestre ganha chapéu de mago e cajado
-    add(torso, GB, cloth, [0, -d.th*0.35, -d.td*1.18], [d.tw*2.1, d.th*(st > 1 ? 2.9 : 2.2), 0.035*s], [0.14, 0, 0], true);
-    add(torso, GY, gold, [0, d.th*0.95, -d.td*0.2], [d.tw*0.85, d.th*0.2, d.td*1.0]);
-    if (st > 1){
-      const hat = new T.Group(); hat.position.set(0, 0.72*r, -0.05*r); hat.rotation.set(-0.15, 0, 0.12); head.add(hat);
-      add(hat, GY, metal, [0, 0, 0], [1.05*r, 0.06*r, 1.05*r], null, true);
-      add(hat, GC, metal, [0, 0.7*r, 0], [0.62*r, 1.4*r, 0.62*r], [0, 0, 0.1], true);
-      add(hat, GY, gold, [0, 0.1*r, 0], [0.63*r, 0.12*r, 0.63*r]);
-      const staff = arms[1];
-      add(staff, GY, toon('#6b4426'), [0, -d.al, d.al*0.35], [0.03*s, d.al*3.2, 0.03*s], [Math.PI/2, 0, 0], true);
-      add(staff, GS, emberMat, [0, -d.al, d.al*2.0], [0.09*s, 0.09*s, 0.09*s], null, true);
-    } else band(cloth, 0.45);
-  }
+// figurino de cada forma: [Guerreiro (Nv. 15), Mestre (Nv. 25)]
+const EVO_KITS = {
+  // Ursoldado: soldado de capacete e mochila / Generurso: general de quepe, dragonas, medalhas, capa e espada
+  urso:[P => { K.shorts(P, '#55603f'); K.shirt(P, '#6b7a4a'); K.belt(P); K.pouches(P, '#55603f'); K.boots(P, '#3a2a1c'); K.helmet(P, '#55603f'); K.backpack(P, '#6b5a3a'); },
+        P => { K.pants(P, '#2f3a2a'); K.coat(P, '#3a4a32', 0.8); K.belt(P, '#1f1a14'); K.boots(P, '#1f1a14'); K.buttons(P); K.epaulettes(P); K.medals(P, 4); K.generalCap(P, '#3a4a32'); K.mustache(P, '#2a1a10'); K.cape(P, '#a8322a', 0.9); K.sword(P, 1); }],
+  // Gorilutador: luta-livre de máscara e cinturão / Gorimperador: imperador de toga, louros, capa roxa e cetro
+  gorila:[P => { K.shorts(P, '#d9472b'); K.champBelt(P); K.boots(P, '#d9472b'); K.wrists(P, GOLD); K.luchador(P, '#2f5bb8', GOLD); },
+          P => { K.robe(P, '#f4efe6'); K.sash(P, '#6a3fa0'); K.cape(P, '#6a3fa0', 1.2); K.laurel(P, GOLD); K.necklace(P, GOLD); K.scepter(P, 1); }],
+  // Rinocavaleiro: cavaleiro de elmo com penacho, escudo e lança / Rinotitã: colosso de armadura de pedra e marreta gigante
+  rinoceronte:[P => { K.pants(P, '#4a3a30'); K.chest(P, '#9aa3b5', '#2f5bb8'); K.pauldrons(P, '#9aa3b5'); K.knight(P, '#9aa3b5', '#d9472b'); K.shield(P, 0, '#2f5bb8'); K.lance(P, 1); },
+               P => { K.pants(P, '#3d3833'); K.chest(P, '#6e675e', GOLD); K.pauldrons(P, '#6e675e', GOLD); K.tassets(P, '#6e675e'); K.gloves(P, '#6e675e'); K.belt(P, '#2a2420'); K.rocks(P); K.hammer(P, 1, '#6e675e', 1.5); }],
+  // Javaliente: viking de colete de pele e machado / Javalorde: senhor viking de elmo de ouro, cota de malha, capa e machado duplo
+  javali:[P => { K.shorts(P, '#4a3426'); K.shirt(P, '#7a4f2a', false); K.furCollar(P, '#a07a50'); K.belt(P); K.boots(P, '#4a3426'); K.viking(P, '#9aa3b5'); K.axe(P, 1); },
+          P => { K.pants(P, '#2a1d14'); K.shirt(P, '#8d96a8'); K.belt(P, '#1f1a14'); K.cape(P, '#8a1f2a', 1.1); K.furCollar(P, '#f4efe6'); K.viking(P, GOLD, GOLD); K.beard(P, '#a0522d', 0.8); K.axe(P, 1, true); }],
+  // Lobisomem: camisa rasgada, juba e garras / Lobonin: samurai sem mestre, chapéu de palha, cachecol e katana
+  lobo:[P => { K.shorts(P, '#4a5a7a'); K.mane(P, '#5a6068'); K.claws(P); K.wrists(P, '#8a8f9a'); },
+        P => { K.pants(P, '#2a3550', 1.35); K.shirt(P, '#3a4a6a'); K.belt(P, '#f4efe6', null); K.straw(P); K.scarf(P, '#a8322a', true); K.katana(P, 1); }],
+  // Guepardleta: atleta de regata com número e tênis / Relampardo: super-herói de máscara, capa e raios
+  guepardo:[P => { K.shorts(P, GOLD); K.shirt(P, '#2f8f5a', false); K.bib(P); K.headband(P, '#ffffff'); K.wrists(P, '#ffffff'); K.boots(P, '#ffffff'); },
+            P => { K.pants(P, '#1f2a44'); K.shirt(P, '#1f2a44'); K.belt(P, GOLD, null); K.boots(P, GOLD); K.wrists(P, GOLD); K.cape(P, GOLD); K.domino(P, '#1f1d22'); K.bolts(P); }],
+  // Canguboxe: boxeador de luvas e protetor / Cangurulenda: campeão de luvas de ouro, cinturão e capa
+  canguru:[P => { K.shorts(P, '#d9472b'); K.belt(P, '#ffffff', null); K.gloves(P, '#d9472b'); K.headgear(P, '#d9472b'); K.boots(P, '#f4f4f4'); },
+           P => { K.shorts(P, GOLD); K.champBelt(P); K.gloves(P, GOLD); K.cape(P, '#d9472b'); K.headband(P, GOLD, true); K.boots(P, '#d9472b'); }],
+  // Macacientista: jaleco, gravata, óculos e tubo de ensaio / Macacomago: mago de túnica estrelada, barba, cajado e livro
+  macaco:[P => { K.pants(P, '#4a4a5a'); K.labcoat(P); K.tie(P, '#2f5bb8'); K.glasses(P, '#2a2140'); K.tube(P, 1); },
+          P => { K.robe(P, '#4a2f8a'); K.wizardHat(P, '#4a2f8a', true); K.beard(P, '#f4f4f4', 1.2); K.staff(P, 1, '#6b4426', haloMat); K.book(P, 0, '#8a1f2a'); K.orbs(P, haloMat, 3); }],
+  // Corujuíza: juíza de toga, peruca e martelo / Arquicoruja: sábia de capelo de formatura, monóculo e livro
+  coruja:[P => { K.robe(P, '#1f1d22'); K.jabot(P); K.wig(P); K.gavel(P, 1); },
+          P => { K.robe(P, '#1e3a7a'); K.sash(P, GOLD); K.gradCap(P); K.monocle(P); K.book(P, 1, '#2b9a4a'); K.orbs(P, foxfireMat, 4); }],
+  // Raposábia: estudiosa de quimono, óculos, pergaminho e leque / Nove-Caudas: nove caudas, marcas no rosto e fogo-fátuo azul
+  raposa:[P => { K.pants(P, '#a8322a', 1.25); K.shirt(P, '#f4efe6'); K.belt(P, '#a8322a', null); K.glasses(P, '#2a2140'); K.scroll(P, 1); K.fan(P, 0, '#d9472b'); },
+          P => { K.pants(P, '#d9472b', 1.3); K.shirt(P, '#ffffff'); K.belt(P, '#d9472b', null); K.tails(P, 8, '#e0742c', '#fff3e6'); K.cheeks(P, '#d9472b'); K.foxfire(P); }],
+  // Tatuerreiro: guerreiro de ombreiras de couro, escudo e lança / Tatublindado: tanque de armadura completa, escudão e marreta
+  tatu:[P => { K.shorts(P, '#6e5a44'); K.headband(P, '#d9472b', true); K.pauldrons(P, '#8a6a4a'); K.belt(P); K.shield(P, 0, '#8a5a30', '#d9472b'); K.lance(P, 1); },
+        P => { K.pants(P, '#4a4a4a'); K.chest(P, '#7d889c', GOLD); K.pauldrons(P, '#7d889c', GOLD); K.tassets(P, '#7d889c'); K.helmet(P, '#7d889c', false); K.shield(P, 0, '#7d889c', GOLD, 1.6); K.hammer(P, 1, '#7d889c'); }],
+  // Calangaceiro: cangaceiro de chapéu de meia-lua, cartucheiras e facão / Calampião: o rei do cangaço, chapéu cheio de estrelas, óculos redondos e dois facões
+  calango:[P => { K.pants(P, '#7a5a3a'); K.shirt(P, '#c9a86a'); K.bandolier(P); K.scarf(P, '#d9472b'); K.cangaceiro(P); K.boots(P, '#5a3a1c'); K.machete(P, 1); },
+           P => { K.pants(P, '#5a3a1c'); K.coat(P, '#8a5a30', 0.7); K.bandolier(P); K.scarf(P, '#d9472b', true); K.cangaceiro(P, true); K.glasses(P, '#2a2140'); K.necklace(P, GOLD); K.boots(P, '#3a2a1c'); K.machete(P, 1); K.machete(P, 0); }],
+  // Carcavaqueiro: vaqueiro de gibão de couro, chapéu e laço / Carcarapajé: pajé de cocar, pintura, colar de dentes e maracá
+  carcara:[P => { K.pants(P, '#8a5a30'); K.coat(P, '#a06a3a', 0.4); K.cowboy(P, '#8a5a30'); K.lasso(P); K.boots(P, '#5a3a1c'); },
+           P => { K.skirt(P, '#c9a86a'); K.belt(P, '#6b4426', null); K.cocar(P, ['#d9472b', GOLD, '#2b9a4a', '#2f5bb8']); K.paint(P, '#d9472b'); K.necklace(P, null, true); K.rattle(P, 1); K.staff(P, 0, '#8a5a30', kc('#2b9a4a')); }],
+  // Iaquerreiro: guerreiro da montanha de gola de pele e machado / Iaquelosso: colosso de gelo com cristais e marreta de gelo
+  iaque:[P => { K.pants(P, '#4a3a30'); K.shirt(P, '#7a5a3a', false); K.furCollar(P, '#e8e0d0'); K.belt(P); K.headband(P, '#2f5bb8', true); K.axe(P, 1); K.boots(P, '#3a2a1c'); },
+         P => { K.pants(P, '#3a4a5a'); K.chest(P, '#bfeaff', '#2f5bb8'); K.pauldrons(P, '#bfeaff', iceMat); K.ice(P); K.gloves(P, '#bfeaff'); K.hammer(P, 1, iceMat, 1.6); }],
+  // Lebreninja: ninja de máscara, faixa e shurikens / Lebrelâmina: samurai de armadura vermelha, kabuto e katana
+  lebre:[P => { K.pants(P, '#22252e'); K.shirt(P, '#22252e'); K.belt(P, '#a8322a', null); K.ninjaMask(P, '#22252e'); K.headband(P, '#a8322a', true, 0.55); K.shuriken(P); K.boots(P, '#22252e'); },
+         P => { K.pants(P, '#2a2140', 1.3); K.chest(P, '#a8322a', GOLD); K.pauldrons(P, '#a8322a'); K.tassets(P, '#a8322a'); K.kabuto(P, '#a8322a'); K.katana(P, 1); }],
+  // Pinguinventor: inventor de boné de hélice, óculos de solda, mochila a jato e chave inglesa / Pinguimperador: imperador de coroa, capa de arminho e cetro
+  pinguim:[P => { K.propeller(P); K.goggles(P, '#8a5a30'); K.jetpack(P); K.belt(P, '#8a5a30'); K.pouches(P, '#8a5a30'); K.wrench(P, 1); },
+           P => { K.cape(P, '#a8322a', 1.1); K.furCollar(P, '#ffffff'); K.crown(P); K.medals(P, 3); K.scepter(P, 1, iceMat); }],
+  // Jacaraté: carateca de quimono e faixa preta / Jacarei: rei do brejo de coroa, capa verde e tridente
+  jacare:[P => { K.gi(P, '#1f1d22'); K.headband(P, '#d9472b', true); },
+          P => { K.shorts(P, '#2b6a3a'); K.belt(P, '#1f1a14'); K.cape(P, '#2b6a3a', 1.2); K.crown(P); K.necklace(P, GOLD); K.wrists(P, GOLD); K.trident(P, 1); }],
+  // Sapoeira: capoeirista de abadá, corda e berimbau / Mestre Sapão: velho mestre de túnica, barbona, sobrancelhas e cajado
+  sapo:[P => { K.pants(P, '#f7f7f2', 1.25); K.belt(P, '#9acd32', null); K.berimbau(P, 1); },
+        P => { K.robe(P, '#8a7a5a'); K.sash(P, '#5a4632'); K.beard(P, '#f4f4f4', 1.4); K.brows(P, '#f4f4f4'); K.staff(P, 1, '#6b4426', null); }],
+  // Capimonge: monge de manto laranja e contas / Capiguru: guru de turbante, barba, auréola e esferas de luz
+  capivara:[P => { K.robe(P, '#e8771b'); K.sash(P, '#a8322a'); K.necklace(P, '#6b4426'); },
+            P => { K.robe(P, '#f4efe6'); K.sash(P, GOLD); K.turban(P, '#f4efe6', '#d9472b'); K.beard(P, '#e8e0d0'); K.halo(P, haloMat, true); K.orbs(P, haloMat, 4); }],
+  // Bufaferreiro: ferreiro de avental, luvas e martelo / Vulcabúfalo: armadura de obsidiana rachada de lava, chamas e marreta em brasa
+  bufalo:[P => { K.shorts(P, '#4a3426'); K.apron(P, '#6b4426'); K.gloves(P, '#3a2a1c'); K.boots(P, '#3a2a1c'); K.hammer(P, 1, '#5a5148'); },
+          P => { K.pants(P, '#2a2224'); K.chest(P, '#2a2224', emberMat); K.pauldrons(P, '#2a2224', emberMat); K.lava(P); K.flames(P); K.hammer(P, 1, emberMat, 1.5); }],
+  // Salamaninja: ninja do fogo de lenço em brasa e duas adagas / Salamandragão: vira dragão, com asas, chifres, garras e lava
+  salamandra:[P => { K.pants(P, '#2a1a1a'); K.shirt(P, '#2a1a1a'); K.belt(P, '#ff6a1f', null); K.ninjaMask(P, '#2a1a1a'); K.scarf(P, emberMat, true); K.sword(P, 0, '#ff8a1f', 0.7, '#2a1a1a'); K.sword(P, 1, '#ff8a1f', 0.7, '#2a1a1a'); },
+              P => { K.shorts(P, '#2a1a1a'); K.wings(P, '#2a1a1a', '#ff6a1f', 2.8, true); K.horns(P, '#2a1a1a', 4); K.lava(P); K.claws(P); K.flames(P); }],
+  // Fênix Maga: feiticeira de capuz e manto, com esferas de fogo / Fênix Divina: disco de sol nas costas, peitoral de ouro, coroa de chamas
+  fenix:[P => { K.robe(P, '#a8241a'); K.hood(P, '#a8241a'); K.sash(P, '#ffd23f'); K.staff(P, 1, '#6b4426', emberMat); K.orbs(P, emberMat, 3); },
+         P => { K.shorts(P, GOLD); K.chest(P, GOLD, emberMat); K.halo(P, haloMat, true); K.horns(P, emberMat, 6, 0.6); K.wrists(P, GOLD); K.flames(P); }]
+};
+function addGear(c, torso, head, arms, legs, eyeCfg, mouthAt){
+  const sp = c.sp, d = c.d, r = d.hr, s = c.s;
+  const R = Math.min(0.36, Math.max(0.25, eyeCfg[3]*2.1))*r;
+  const P = {c, sp, d, r, s, torso, head, arms, legs, mouth:mouthAt, eye:{x:Math.max(eyeCfg[0], 0.24)*r, y:eyeCfg[1]*r + R*0.3, z:eyeCfg[2]*r, R}};
+  // aves evoluídas trocam a asa por braço, mas as asas continuam nas costas e batem; a Fênix Divina tem asas em chamas
+  if (sp.bird) K.wings(P, sp.dark, sp.feat === 'phoenix' && sp.stage > 1 ? emberMat : sp.dark, sp.stage > 1 ? 2.6 : 2.1);
+  const kit = EVO_KITS[c.member.species];
+  if (kit) kit[sp.stage - 1](P);
 }
 
 /* ================= Animais (ragdoll ativo) ================= */

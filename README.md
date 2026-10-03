@@ -59,35 +59,37 @@ No celular aparecem botões na tela.
   - Macaco: Pedrada
   - Coruja: Pio Hipnótico
   - Raposa: Truque da Raposa
-- **Evolução no estilo Digimon:** a cada evolução o animal fica mais parecido com gente.
-  - **Nível 15, Guerreiro:** quem andava de quatro fica de pé e passa a socar. Ganha shorts, cinto e munhequeiras, e o corpo fica mais alto.
-  - **Nível 25, Mestre:** fica ainda mais alto, com cabeça menor e equipamento da classe. Força usa armadura e elmo de chifres, Agilidade usa lenço comprido e espada nas costas, e Inteligência usa capa, chapéu de mago e cajado.
+- **Evolução no estilo Digimon:** a cada evolução o animal fica mais parecido com gente, e cada espécie tem o próprio figurino, combinando com o nome da forma.
+  - **Nível 15, Guerreiro:** quem andava de quatro fica de pé e passa a socar, e o corpo fica mais alto.
+  - **Nível 25, Mestre:** fica ainda mais alto, com a cabeça menor e o figurino completo.
   - Cada evolução aumenta FOR, AGI e INT (+12% no Guerreiro e +25% no Mestre). Se o animal está com você, ele sobe num casulo de luz e sai na forma nova.
 
   | Animal | Guerreiro | Mestre |
   |---|---|---|
-  | Urso | Ursoldado | Generurso |
-  | Gorila | Gorilutador | Gorimperador |
-  | Rinoceronte | Rinocavaleiro | Rinotitã |
-  | Javali | Javaliente | Javalorde |
-  | Lobo | Lobisomem | Lobonin |
-  | Guepardo | Guepardleta | Relampardo |
-  | Canguru | Canguboxe | Cangurulenda |
-  | Macaco | Macacientista | Macacomago |
-  | Coruja | Corujuíza | Arquicoruja |
-  | Raposa | Raposábia | Nove-Caudas |
-  | Tatu | Tatuerreiro | Tatublindado |
-  | Calango | Calangaceiro | Calampião |
-  | Carcará | Carcavaqueiro | Carcarapajé |
-  | Iaque | Iaquerreiro | Iaquelosso |
-  | Lebre-da-Neve | Lebreninja | Lebrelâmina |
-  | Pinguim | Pinguinventor | Pinguimperador |
-  | Jacaré | Jacaraté | Jacarei |
-  | Sapo-Boi | Sapoeira | Mestre Sapão |
-  | Capivara | Capimonge | Capiguru |
-  | Búfalo de Lava | Bufaferreiro | Vulcabúfalo |
-  | Salamandra | Salamaninja | Salamandragão |
-  | Fênix | Fênix Maga | Fênix Divina |
+  | Urso | Ursoldado: farda, capacete e mochila | Generurso: quepe, dragonas, medalhas, capa e espada |
+  | Gorila | Gorilutador: máscara de luta-livre e cinturão | Gorimperador: toga, louros, capa roxa e cetro |
+  | Rinoceronte | Rinocavaleiro: elmo de penacho, escudo e lança | Rinotitã: armadura de pedra e marreta gigante |
+  | Javali | Javaliente: viking de gola de pele e machado | Javalorde: elmo de ouro, cota de malha, barba e machado duplo |
+  | Lobo | Lobisomem: juba eriçada e garras | Lobonin: samurai de chapéu de palha, cachecol e katana |
+  | Guepardo | Guepardleta: atleta de regata com número | Relampardo: super-herói de máscara, capa e raios |
+  | Canguru | Canguboxe: luvas e protetor de boxe | Cangurulenda: luvas de ouro, cinturão e capa |
+  | Macaco | Macacientista: jaleco, óculos e tubo de ensaio | Macacomago: mago de chapéu, barba, cajado e livro |
+  | Coruja | Corujuíza: toga, peruca e martelo de juíza | Arquicoruja: capelo de formatura, monóculo e livro |
+  | Raposa | Raposábia: quimono, óculos, pergaminho e leque | Nove-Caudas: nove caudas, marcas no rosto e fogo-fátuo azul |
+  | Tatu | Tatuerreiro: ombreiras de couro, escudo e lança | Tatublindado: armadura completa, escudão e marreta |
+  | Calango | Calangaceiro: chapéu de meia-lua, cartucheiras e facão | Calampião: chapéu cheio de estrelas, óculos redondos e dois facões |
+  | Carcará | Carcavaqueiro: gibão de couro, chapéu e laço | Carcarapajé: cocar, pintura, colar de dentes e maracá |
+  | Iaque | Iaquerreiro: gola de pele, faixa e machado | Iaquelosso: armadura e cristais de gelo, marreta de gelo |
+  | Lebre-da-Neve | Lebreninja: roupa de ninja, máscara e shurikens | Lebrelâmina: samurai de armadura vermelha, kabuto e katana |
+  | Pinguim | Pinguinventor: boné de hélice, óculos de solda e mochila a jato | Pinguimperador: coroa, capa de arminho e cetro |
+  | Jacaré | Jacaraté: quimono e faixa preta | Jacarei: coroa, capa verde e tridente |
+  | Sapo-Boi | Sapoeira: abadá, corda e berimbau | Mestre Sapão: túnica, barbona, sobrancelhas e cajado |
+  | Capivara | Capimonge: manto laranja e contas | Capiguru: turbante, barba, auréola e esferas de luz |
+  | Búfalo de Lava | Bufaferreiro: avental, luvas e martelo | Vulcabúfalo: armadura rachada de lava e marreta em brasa |
+  | Salamandra | Salamaninja: ninja do fogo com duas adagas | Salamandragão: vira dragão, com asas, chifres e garras |
+  | Fênix | Fênix Maga: capuz, manto e esferas de fogo | Fênix Divina: disco de sol, peitoral de ouro e asas em chamas |
+
+  As aves evoluídas trocam as asas por braços e ficam com asas nas costas que batem.
 
   Animais selvagens de nível alto (Pico Congelado em diante) já aparecem evoluídos.
 - **Chefes mitológicos e chaves:** cada mapa tem uma criatura mitológica que só existe ali, num covil (chão escuro com aro vermelho e tochas). Ela só aparece uma vez por jogo: vencida ou capturada, deixa a chave do mapa seguinte. Os portais dos Campos ficam trancados com correntes e cadeado até você ter a chave.
