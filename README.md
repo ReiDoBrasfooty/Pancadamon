@@ -90,6 +90,26 @@ No celular aparecem botões na tela.
   | Fênix | Fênix Maga | Fênix Divina |
 
   Animais selvagens de nível alto (Pico Congelado em diante) já aparecem evoluídos.
+- **Chefes mitológicos e chaves:** cada mapa tem uma criatura mitológica que só existe ali, num covil (chão escuro com aro vermelho e tochas). Ela só aparece uma vez por jogo: vencida ou capturada, deixa a chave do mapa seguinte. Os portais dos Campos ficam trancados com correntes e cadeado até você ter a chave.
+
+  | Mapa | Criatura | Classe e especial | Nível | Forma no covil | Deixa |
+  |---|---|---|---|---|---|
+  | Campos Pancada | Unicórnio | AGI · Chifrada Arco-Íris | 12 | Unicórnio | Chave do Sertão |
+  | Sertão Rachado | Esfinge | INT · Enigma da Esfinge | 17 | Esfinge Alada | Chave do Pico |
+  | Pico Congelado | Grifo | FOR · Mergulho do Grifo | 21 | Grifo Real | Chave do Brejo |
+  | Brejo Lamacento | Hidra | AGI · Mordida das Cabeças | 26 | Hidra Ancestral | Chave da Cratera |
+  | Cratera Brava | Dragão | FOR · Bola de Fogo | 31 | Dragão Imperador | Coroa da Cratera |
+
+  - **Evolução própria:** as criaturas mitológicas não viram gente como os outros animais. Elas continuam bichos e ficam mais lendárias (estágios Mítico, Desperto e Lendário):
+    - **Unicórnio → Alicórnio → Unicórnio Celestial:** ganha asas, o chifre cresce e o último tem asas douradas, auréola e estrelas em volta.
+    - **Esfinge → Esfinge Alada → Grande Esfinge:** leoa com cocar de faraó; ganha asas douradas e depois colar e a coroa dupla do faraó.
+    - **Grifo → Grifo Real → Grifo Tempestade:** cabeça de águia e corpo de leão; as asas crescem, ganham crista e pontas de ouro, e por fim raios azuis.
+    - **Hidra → Hidra de Cinco Cabeças → Hidra Ancestral:** começa com 3 cabeças, passa a 5 e termina com 7, cada uma num pescoço que balança.
+    - **Dragão → Dragão Ancião → Dragão Imperador:** asas de morcego e chifres que se multiplicam; o último tem chifres de ouro, couro rachado de lava e asas em brasa.
+  - O chefe tem 50% a mais de PV e 10% a mais de atributos, e dá o dobro de XP e o triplo de moedas.
+  - Capturar é mais difícil (40% da chance normal), mas a Semente Dourada continua garantida. Capturada, a criatura entra no time com os atributos extras e continua evoluindo do jeito dela.
+  - Se você perder ou fugir, o chefe volta pro covil com a vida cheia.
+  - A mochila (Z) mostra cada chefe e o que falta. Saves antigos já ganham as chaves dos mapas que o time aguenta.
 - **Captura com frutos e sementes:** Bolota, Pinha (1,5x), Coco (2,2x) e Semente Dourada (garantida).
 - **Loja do Mato e mochila:** itens de cura (Fruta Silvestre, Pote de Mel, Cesta de Frutas, Erva Reanimadora) e de captura, comprados com moedas ganhas nas batalhas.
 - **Time de até 5 animais e Caixa de Animais:** capturas com o time cheio vão pra caixa, um terminal ao lado do Centro de Cura onde você guarda e pega animais. Quem é guardado descansa e volta curado.

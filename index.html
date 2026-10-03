@@ -122,6 +122,10 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .targets{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .targets button{display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;font-size:13px}
 .targets img{width:30px;height:30px}
+.bosses{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.boss{border:3px solid var(--line);border-radius:14px;padding:8px 10px;background:var(--soft);display:flex;flex-direction:column;gap:2px;min-width:0}
+.boss b{font-family:var(--display);font-weight:400;font-size:18px}
+.boss.done{outline:3px solid #f2c230;outline-offset:-1px}
 .hint{font-size:13px;font-weight:800;color:var(--muted);margin:6px 0 0}
 #touch{position:fixed;left:0;right:0;bottom:calc(10px + env(safe-area-inset-bottom,0px));display:none;justify-content:space-between;align-items:flex-end;padding:0 12px;pointer-events:none}
 #touch .pad{display:grid;grid-template-columns:repeat(3,52px);grid-template-rows:repeat(3,52px);gap:4px;pointer-events:auto}
@@ -217,7 +221,18 @@ const SPECIES = {
   salamandra:{name:'Salamandra', region:4, attr:'agilidade', plan:'quad', feat:'salamander', color:'#ff6a1f', dark:'#2a1a1a', belly:'#ffd27a', size:0.85, leg:0.7, head:0.9,
     base:[7,17,7], grow:[1.1,3.0,1.2], special:'blink', specialName:'Faísca', desc:'Some numa faísca e reaparece atrás do inimigo.'},
   fenix:{name:'Fênix', region:4, attr:'inteligencia', plan:'biped', feat:'phoenix', bird:'#ffd23f', color:'#e8412b', dark:'#a8241a', belly:'#ffb347', size:0.95, arm:1.25, leg:0.7, head:1.0,
-    base:[7,10,17], grow:[1.1,1.6,3.1], special:'hypno', specialName:'Brilho da Fênix', desc:'Brilha tanto que o inimigo fica zonzo e confuso.'}
+    base:[7,10,17], grow:[1.1,1.6,3.1], special:'hypno', specialName:'Brilho da Fênix', desc:'Brilha tanto que o inimigo fica zonzo e confuso.'},
+  // ---- criaturas mitológicas: só existem como chefe de cada mapa (myth = não aparecem no mato e evoluem do jeito delas)
+  unicornio:{name:'Unicórnio', myth:true, region:0, attr:'agilidade', plan:'quad', feat:'unicorn', color:'#f6f2ff', dark:'#b9a6e8', belly:'#ffffff', size:1.15, leg:1.25, head:0.95,
+    base:[11,15,9], grow:[1.8,2.8,1.6], special:'dash', specialName:'Chifrada Arco-Íris', desc:'Galopa pelos Campos deixando um rastro de arco-íris. O chifre fura qualquer defesa.'},
+  esfinge:{name:'Esfinge', myth:true, region:1, attr:'inteligencia', plan:'quad', feat:'sphinx', color:'#c48a42', dark:'#6e4a20', belly:'#ecd2a0', size:1.2, leg:0.9, head:1.1,
+    base:[9,8,17], grow:[1.5,1.3,3.0], special:'hypno', specialName:'Enigma da Esfinge', desc:'Leoa de cocar de faraó. Faz uma pergunta tão difícil que o inimigo fica tonto.'},
+  grifo:{name:'Grifo', myth:true, region:2, attr:'forca', plan:'quad', feat:'griffin', bird:'#f2b632', color:'#b8864a', dark:'#5a3a1c', belly:'#e8d0a0', size:1.2, leg:1.0, head:1.0,
+    base:[17,9,6], grow:[3.0,1.6,1.0], special:'slam', specialName:'Mergulho do Grifo', desc:'Corpo de leão e cabeça de águia. Sobe alto e mergulha em cima da presa.'},
+  hidra:{name:'Hidra', myth:true, region:3, attr:'agilidade', plan:'quad', feat:'hydra', color:'#3f8a64', dark:'#24503a', belly:'#c9d88a', size:1.15, leg:0.7, head:0.95,
+    base:[12,15,7], grow:[2.2,2.8,1.1], special:'blitz', specialName:'Mordida das Cabeças', desc:'Serpente do brejo com várias cabeças. Cada evolução nasce cabeça nova.'},
+  dragao:{name:'Dragão', myth:true, region:4, attr:'forca', plan:'quad', feat:'dragon', rock:'#ff8a1f', color:'#c8402a', dark:'#5a1a14', belly:'#f2c27a', size:1.2, leg:0.95, head:1.05,
+    base:[15,8,10], grow:[2.6,1.2,1.7], special:'throw', specialName:'Bola de Fogo', desc:'Dorme dentro do vulcão. Cospe bola de fogo e as asas fazem ventania.'}
 };
 const STARTERS = ['urso','lobo','macaco'];
 // Evoluções no estilo Digimon: a forma depende só do nível. No EVO_LV[0] o animal vira Guerreiro (fica de pé
@@ -230,8 +245,13 @@ const EVO_NAMES = {
   coruja:['Corujuíza','Arquicoruja'], raposa:['Raposábia','Nove-Caudas'], tatu:['Tatuerreiro','Tatublindado'], calango:['Calangaceiro','Calampião'],
   carcara:['Carcavaqueiro','Carcarapajé'], iaque:['Iaquerreiro','Iaquelosso'], lebre:['Lebreninja','Lebrelâmina'], pinguim:['Pinguinventor','Pinguimperador'],
   jacare:['Jacaraté','Jacarei'], sapo:['Sapoeira','Mestre Sapão'], capivara:['Capimonge','Capiguru'], bufalo:['Bufaferreiro','Vulcabúfalo'],
-  salamandra:['Salamaninja','Salamandragão'], fenix:['Fênix Maga','Fênix Divina']
+  salamandra:['Salamaninja','Salamandragão'], fenix:['Fênix Maga','Fênix Divina'],
+  unicornio:['Alicórnio','Unicórnio Celestial'], esfinge:['Esfinge Alada','Grande Esfinge'], grifo:['Grifo Real','Grifo Tempestade'],
+  hidra:['Hidra de Cinco Cabeças','Hidra Ancestral'], dragao:['Dragão Ancião','Dragão Imperador']
 };
+// as mitológicas não viram gente: ganham asas, cabeças, auréola, lava...
+const MYTH_TIER = ['Mítico', 'Desperto', 'Lendário'];
+const tierName = m => (SPECIES[m.species].myth ? MYTH_TIER : EVO_TIER)[stageOf(m)];
 const stageOf = m => m.level >= EVO_LV[1] ? 2 : m.level >= EVO_LV[0] ? 1 : 0;
 const formName = (k, st) => st ? EVO_NAMES[k][st - 1] : SPECIES[k].name;
 // espécie "efetiva" da forma atual: quem andava de quatro levanta, pernas crescem e a cabeça encolhe
@@ -242,20 +262,23 @@ function formOf(m){
   const sp = SPECIES[m.species];
   if (!st) return FORMS[key] = sp;
   const quad = sp.plan === 'quad', k = st === 1;
+  if (sp.myth) return FORMS[key] = {...sp, stage:st, name:formName(m.species, st), size:sp.size*(k ? 1.1 : 1.2), leg:sp.leg*(k ? 1.05 : 1.1)};
   return FORMS[key] = {...sp, stage:st, fromQuad:quad, plan:'biped', name:formName(m.species, st),
     size:sp.size*(k ? 1.08 : 1.16), tall:k ? 1.1 : 1.2, slim:k ? 0.94 : 0.9, arm:(sp.arm || 0.95)*(k ? 1.05 : 1.12),
     leg:Math.max(k ? 0.9 : 1.05, sp.leg*(k ? 1.15 : 1.3)), head:sp.head*(k ? 0.88 : 0.8)*(quad ? 0.92 : 1)};
 }
 function stats(m){
-  const sp = SPECIES[m.species], L = m.level - 1, ek = [1, 1.12, 1.25][stageOf(m)];
+  // chefe (boss = índice do mapa) é 10% mais forte, inclusive depois de capturado; wildBoss = ainda no covil, com PV de chefe
+  const sp = SPECIES[m.species], L = m.level - 1, ek = [1, 1.12, 1.25][stageOf(m)]*(isBoss(m) ? 1.1 : 1);
   const [s, a, i] = sp.base.map((b, k) => (b + sp.grow[k]*L)*ek);
   return {
     str:s, agi:a, int:i,
-    maxHp: Math.round(40 + s*7), power: 0.55 + s*0.035, defense: 0.75 + s*0.02,
+    maxHp: Math.round((40 + s*7)*(m.wildBoss ? 1.5 : 1)), power: 0.55 + s*0.035, defense: 0.75 + s*0.02,
     speed: Math.min(1.55, 0.7 + a*0.03), atkCd: Math.max(0.18, 0.42 - a*0.008), dodge: Math.min(0.3, a*0.009), jump: Math.min(10.5, 7.5 + a*0.08),
     specCd: Math.max(1.8, 5.5 - i*0.13), specPow: 0.6 + i*0.045
   };
 }
+const isBoss = m => typeof m.boss === 'number';
 const xpNext = m => 30 + m.level*20;
 function newMember(species, level){ const m = {species, level, xp:0, nick:formName(species, stageOf({level}))}; m.maxHp = stats(m).maxHp; m.hp = m.maxHp; return m; }
 
@@ -273,7 +296,7 @@ const ITEMS = {
 const CAPTURE_KEYS = Object.keys(ITEMS).filter(k => ITEMS[k].cat === 'captura');
 
 const TEAM_MAX = 5;   // o resto vai pra Caixa de Animais, ao lado do Centro de Cura
-let game = {team:[], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota'};
+let game = {team:[], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota', keys:[], bosses:{}};
 const SAVE_KEY = 'pancadamon3d_v2';
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(game)); }catch(e){} }
 function load(){
@@ -291,6 +314,12 @@ function load(){
         if ([0, 1, 2].some(k => m.nick === formName(m.species, k))) m.nick = formName(m.species, stageOf(m));
         const mh = stats(m).maxHp;
         if (m.maxHp !== mh){ m.hp = m.hp > 0 ? Math.max(1, Math.round(m.hp*mh/m.maxHp)) : 0; m.maxHp = mh; }
+      }
+      // saves de antes dos chefes: libera os mapas onde a pessoa já estava ou que o time já aguenta
+      if (!s.bosses || typeof s.bosses !== 'object') s.bosses = {};
+      if (!Array.isArray(s.keys)){
+        const top = Math.max(...[...s.team, ...s.box].map(m => m.level | 0));
+        s.keys = [1, 2, 3, 4].filter(i => i <= (s.map | 0) || top >= [0, 8, 13, 17, 22][i]);
       }
       game = s; return true;
     }
@@ -535,7 +564,7 @@ function buildShop(b){
     const st = mesh(new T.BoxGeometry(W/stripes + 0.01, 0.1, D + 0.9), toon(i % 2 ? '#ffffff' : '#3aa64a'));
     st.position.set(-W/2 + W/stripes*(i + 0.5), 2.7, 0.25); st.rotation.x = 0.18; g.add(st);
   }
-  const sign = new T.Mesh(new T.BoxGeometry(2.0, 0.6, 0.1), [wood, wood, wood, wood, new T.MeshBasicMaterial({map:signTexture(['Loja do Mato', 'frutos e curas'])}), wood]);
+  const sign = new T.Mesh(new T.BoxGeometry(2.0, 0.6, 0.1), [wood, wood, wood, wood, signFace(['Loja do Mato', 'frutos e curas']), wood]);
   sign.position.set(0, 3.2, 0.35); outline(sign, 1.04); g.add(sign);
   const coin = mesh(new T.CylinderGeometry(0.17, 0.17, 0.06, 16), toon('#f2c230')); coin.rotation.x = Math.PI/2; coin.position.set(-1.15, 3.2, 0.42); g.add(coin);
   // tábuas do balcão, barris nos fundos e lampião pendurado
@@ -658,8 +687,15 @@ function buildPortal(p){
   swirl.position.y = 1.6; swirl.scale.y = 1.2; g.add(swirl);
   const rings = [1.0, 0.62].map((rr, i) => { const m = mesh(new T.TorusGeometry(rr, 0.06, 6, 24, Math.PI*1.4), new T.MeshBasicMaterial({color:'#ffffff', side:T.DoubleSide}), false); m.position.z = 0.02*(i + 1); swirl.add(m); return m; });
   const pad = mesh(new T.CircleGeometry(1.4, 24), lam(dest.col), false); pad.rotation.x = -Math.PI/2; pad.position.set(0, 0.02, 1.0); g.add(pad);
+  // correntes em X e cadeado: só aparecem enquanto falta a chave do mapa de destino (ver renderRegionFx)
+  const lock = new T.Group(); lock.position.set(0, 1.6, 0.12); g.add(lock);
+  const chain = toon('#5a5148');
+  for (const a of [0.72, -0.72]){ const c = mesh(GB, chain); c.scale.set(3.3, 0.12, 0.08); c.rotation.z = a; outline(c, 1.06); lock.add(c); }
+  const body = mesh(GB, toon('#f2c230')); body.scale.set(0.62, 0.5, 0.2); body.position.set(0, -0.12, 0.08); outline(body, 1.08); lock.add(body);
+  const shackle = mesh(new T.TorusGeometry(0.2, 0.06, 6, 14, Math.PI), toon('#c9ccd6')); shackle.position.set(0, 0.13, 0.08); lock.add(shackle);
+  const hole = mesh(GS, toon('#2a2140'), false); hole.scale.set(0.06, 0.09, 0.03); hole.position.set(0, -0.12, 0.19); lock.add(hole);
   placeGroup(g, p);
-  portalFx.push({swirl, rings, gem});
+  portalFx.push({swirl, rings, gem, lock, to:p.to, col:new T.Color(dest.col)});
   const s = rotPt(p, 0, 1.0);
   SPOTS.push({kind:'portal', x:s.x, z:s.z, r:1.6, b:p, lz:1.0, to:p.to});
   const sp = rotPt(p, 3.2, 1.4); sign(sp.x, sp.z, [dest.name, dest.lv]);
@@ -673,17 +709,28 @@ function staticBox(x, y, z, hw, hh, hd){
 const solidRect = (x, z, hw, hd, h=1) => { rects.push({x, z, hw, hd}); staticBox(x, h/2, z, hw, h/2, hd); };
 const solidCircle = (x, z, r, h=1) => { colliders.push({x, z, r}); staticBox(x, h/2, z, r*0.75, h/2, r*0.75); };
 function signTexture(lines){
-  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 128;
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
   const g = cv.getContext('2d');
-  g.fillStyle = '#f3dfb0'; g.fillRect(0, 0, 256, 128);
-  g.fillStyle = '#4a2c14'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  lines.forEach((l, i) => { g.font = `${i ? 'bold 24px' : '900 32px'} Nunito, 'Arial Black', sans-serif`; g.fillText(l, 128, 128/(lines.length + 1)*(i + 1)); });
-  return new T.CanvasTexture(cv);
+  g.fillStyle = '#f3dfb0'; g.fillRect(0, 0, 512, 256);
+  g.fillStyle = '#2e1a0a'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  // letra grande que encolhe só o necessário pra caber na tábua
+  lines.forEach((l, i) => {
+    let px = i ? 62 : 84;
+    do { g.font = `900 ${px}px Nunito, 'Arial Black', sans-serif`; px -= 2; } while (g.measureText(l).width > 484 && px > 20);
+    g.fillText(l, 256, 256/(lines.length + 1)*(i + 1) + (i ? 6 : -4));
+  });
+  const t = new T.CanvasTexture(cv); t.anisotropy = 4; return t;
+}
+// face com texto: grava alfa 0 pro pós-processamento deixar as letras limpas (ver drawFrame)
+function signFace(lines){
+  const m = new T.MeshBasicMaterial({map:signTexture(lines)});
+  m.onBeforeCompile = s => { s.fragmentShader = s.fragmentShader.replace(/}\s*$/, 'gl_FragColor.a = 0.0;\n}'); };
+  return m;
 }
 function sign(x, z, lines){
   const g = new T.Group(), wood = toon('#8a5a3b');
   const post = mesh(GY, wood); post.scale.set(0.08, 1.5, 0.08); post.position.y = 0.75; g.add(post);
-  const face = new T.MeshBasicMaterial({map:signTexture(lines)});
+  const face = signFace(lines);
   const board = new T.Mesh(new T.BoxGeometry(1.7, 0.85, 0.08), [wood, wood, wood, wood, face, wood]);
   board.position.y = 1.4; board.rotation.z = rand(-0.06, 0.06); outline(board, 1.04); g.add(board);
   g.position.set(x, 0, z); g.rotation.y = Math.PI/4; scene.add(g);
@@ -1157,7 +1204,7 @@ const NPC_SETS = {
   camp:['Tô esperando o marshmallow dourar. Faz três dias.', 'Ouvi um Gorila socando o chão no Mato Bravo. Ou era trovão.', 'Dica: se o bicho estiver nocauteado, a captura fica mais fácil.'],
   lago:['Ainda não pesquei nada. Mas o Lago Raso tem 30 centímetros.', 'Shh! Você vai espantar os peixes imaginários.', 'Hoje um Javali roubou minha isca. E minha bota.'],
   centro:['O Centro de Cura cura tudo. Menos tédio.', 'Dica: a Pinha captura melhor que a Bolota. O Coco melhor ainda.', 'Quer duelar com amigo? Chega perto dele e aperta F!',
-    'Cada ponta da estrada tem um portal pra outro mapa. Os bichos de lá são bem mais fortes.'],
+    'Cada ponta da estrada tem um portal pra outro mapa. Os bichos de lá são bem mais fortes.', 'Os portais estão trancados! Dizem que um Unicórnio de verdade vive no oeste, perto da fazenda. Ele guarda a primeira chave!'],
   sertao:['Aqui faz tanto calor que o Javali já vem assado. Brincadeira. Ele morde.', 'Esse cacto me abraçou. Eu não pedi.', 'O Guepardo do sertão corre tanto que levanta poeira de ontem.',
     'Viu o esqueleto gigante? Dizem que era um Canguru que pulou alto demais.', 'Água no oásis é de graça. Sombra é extra.', 'Tatu, Calango e Carcará só existem aqui no sertão. Pega os três!'],
   gelo:['Meu nariz congelou. Agora é um picolé de nariz.', 'O boneco de neve ali olha pra mim. Sempre.', 'Urso do Pico não hiberna. Ele soca.',
@@ -1599,6 +1646,86 @@ function buildCratera(r){
 const REGION_BUILDERS = [null, buildSertao, buildPico, buildBrejo, buildCratera];
 for (const r of REGIONS.slice(1)) buildRegion(r, () => { PORTALS.filter(p => p.region === r.id).forEach(buildPortal); REGION_BUILDERS[r.id](r); });
 
+/* ---------- Chefes ----------
+   Cada mapa tem uma criatura mitológica no seu covil. Ela só existe até ser derrotada ou capturada (uma vez por save, em game.bosses)
+   e deixa a chave do mapa seguinte; a última deixa a Coroa. Os portais dos Campos pros outros mapas ficam trancados sem a chave.
+   O nível decide a forma: o Grifo já vem Grifo Real, a Hidra do brejo já tem sete cabeças. */
+const BOSSES = [
+  {region:0, species:'unicornio', level:12, x:-29, z:-19},
+  {region:1, species:'esfinge', level:17, x:30, z:17},
+  {region:2, species:'grifo', level:21, x:-29, z:22},
+  {region:3, species:'hidra', level:26, x:28, z:-28},
+  {region:4, species:'dragao', level:31, x:-27, z:28}
+];
+BOSSES.forEach(b => { b.name = formName(b.species, stageOf(b)); });
+const KEY_NAMES = [null, 'Chave do Sertão', 'Chave do Pico', 'Chave do Brejo', 'Chave da Cratera'];
+const unlocked = id => !id || game.keys.includes(id);
+const LOCKED_COL = new T.Color('#8a8496');
+for (const b of BOSSES){
+  const r = REGIONS[b.region];
+  b.x += r.cx;
+  b.patch = {x:b.x, z:b.z, r:3.5, region:b.region};
+  ZONES.push({name:'Covil: ' + b.name, x:b.x, z:b.z, r:4.5});
+  // covil: chão escuro, roda de pedras e duas tochas
+  const g = new T.Group(); g.position.set(b.x, 0, b.z); r.root.add(g);
+  const floor = mesh(new T.CircleGeometry(4, 32), lam('#4a3e3a'), false); floor.rotation.x = -Math.PI/2; floor.position.y = 0.021; g.add(floor);
+  const rim = mesh(new T.RingGeometry(3.6, 4, 32), new T.MeshBasicMaterial({color:'#d9472b'}), false); rim.rotation.x = -Math.PI/2; rim.position.y = 0.025; g.add(rim);
+  for (let i = 0; i < 10; i++){
+    const a = i/10*TAU; if (Math.abs(wrapA(a - Math.PI/4)) < 0.4) continue;   // entrada virada pra câmera
+    const st = mesh(new T.DodecahedronGeometry(0.35, 0), toon('#8f887b')); st.position.set(Math.cos(a)*4.3, 0.2, Math.sin(a)*4.3); st.rotation.set(rand(0, 1), rand(0, TAU), 0); outline(st, 1.06); g.add(st);
+  }
+  for (const sx of [-1, 1]){
+    const a = Math.PI/4 + sx*0.55, x = Math.cos(a)*4.4, z = Math.sin(a)*4.4;
+    const pole = mesh(GY, toon('#5a4632')); pole.scale.set(0.07, 1.6, 0.07); pole.position.set(x, 0.8, z); g.add(pole);
+    const flame = new T.Group(); flame.position.set(x, 1.65, z); g.add(flame);
+    const f1 = mesh(new T.ConeGeometry(0.16, 0.45, 8), new T.MeshBasicMaterial({color:'#ff8a1f'}), false); f1.position.y = 0.2; flame.add(f1);
+    const f2 = mesh(new T.ConeGeometry(0.08, 0.28, 8), new T.MeshBasicMaterial({color:'#ffe066'}), false); f2.position.y = 0.16; flame.add(f2);
+    fires.push(flame);
+  }
+}
+function spawnBoss(b){
+  const m = newMember(b.species, b.level);
+  m.nick = b.name; m.boss = b.region; m.wildBoss = 1; m.maxHp = stats(m).maxHp; m.hp = m.maxHp;
+  const c = makeCreature(m, b.x, b.z, 'wild');
+  c.patch = b.patch; c.boss = b; c.cool = 2; b.c = c;
+}
+// avisa a pessoa por que o portal não abre
+const lockMsg = to => `O portal pra ${REGIONS[to].name} está trancado. Vença ou capture ${BOSSES[to - 1].name}, o chefe de ${REGIONS[to - 1].name}, pra ganhar a ${KEY_NAMES[to]}.`;
+// chave flutuando por cima do chefe vencido
+const keyFx = [];
+function dropKey(x, y, z, crown){
+  const g = new T.Group(), gold = toon('#f2c230');
+  if (crown){ add(g, GY, gold, [0, 0, 0], [0.3, 0.12, 0.3], null, true); for (let i = 0; i < 5; i++){ const a = i/5*TAU; add(g, GC, gold, [Math.sin(a)*0.27, 0.15, Math.cos(a)*0.27], [0.07, 0.18, 0.07], null, true); } }
+  else {
+    add(g, new T.TorusGeometry(0.16, 0.05, 8, 18), gold, [0, 0.22, 0], [1, 1, 1], null, true);
+    add(g, GB, gold, [0, -0.12, 0], [0.07, 0.5, 0.07], null, true);
+    add(g, GB, gold, [0.08, -0.3, 0], [0.13, 0.06, 0.06]); add(g, GB, gold, [0.07, -0.18, 0], [0.1, 0.06, 0.06]);
+  }
+  g.position.set(x, y, z); g.scale.setScalar(1.6); scene.add(g);
+  keyFx.push({g, t:0});
+  burst({x, y, z}, 30, ['#f2c230', '#fff1a8', '#ffffff'], 5); shockwave(x, z, '#f2c230', 4);
+}
+function updateKeyFx(dt){
+  for (let i = keyFx.length - 1; i >= 0; i--){
+    const k = keyFx[i]; k.t += dt;
+    k.g.position.y += dt*(k.t < 1.2 ? 1.2 : 0.2); k.g.rotation.y += dt*5;
+    if (k.t > 1.8) k.g.scale.setScalar(Math.max(0.01, 1.6*(1 - (k.t - 1.8)/0.6)));
+    if (k.t > 2.4){ scene.remove(k.g); keyFx.splice(i, 1); }
+  }
+}
+function bossReward(b, how){
+  game.bosses[b.region] = how;
+  const next = b.region + 1, last = !KEY_NAMES[next];
+  if (!last && !game.keys.includes(next)) game.keys.push(next);
+  if (last) game.crown = true;
+  const p = b.c && b.c.torso ? b.c.torso.position : trainer.pos;
+  dropKey(p.x, 1.6, p.z, last);
+  trainer.cheerT = 3;
+  showEvoText(last ? 'Você venceu o último chefe!' : `${b.name} deixou cair a`, last ? 'Coroa da Cratera!' : `${KEY_NAMES[next]}!`);
+  setTimeout(() => { if (!evo) showEvoText('', ''); }, 2600);
+  return last ? 'Você ganhou a Coroa da Cratera! Todos os chefes foram vencidos.' : `Você ganhou a ${KEY_NAMES[next]}! O portal pra ${REGIONS[next].name} está aberto.`;
+}
+
 // troca de mapa: só o mapa atual fica visível e com física; bichos selvagens dos outros somem
 let curRegion = null;
 function applyRegion(r){
@@ -1640,7 +1767,12 @@ const ambFx = new T.InstancedMesh(new T.IcosahedronGeometry(1, 0), new T.MeshBas
 ambFx.frustumCulled = false; ambFx.visible = false; scene.add(ambFx);
 const _amb = new T.Object3D(), wrap36 = v => ((v % 36) + 36) % 36 - 18;
 function renderRegionFx(t){
-  for (const f of portalFx){ f.rings[0].rotation.z = t*2.2; f.rings[1].rotation.z = -t*3.1; f.gem.rotation.y = t*1.5; f.gem.position.y = 4.15 + Math.sin(t*2)*0.08; f.swirl.material.opacity = 0.6 + Math.sin(t*3)*0.12; }
+  for (const f of portalFx){
+    const open = unlocked(f.to);
+    f.rings[0].rotation.z = t*2.2; f.rings[1].rotation.z = -t*3.1; f.gem.rotation.y = t*1.5; f.gem.position.y = 4.15 + Math.sin(t*2)*0.08;
+    f.swirl.material.opacity = open ? 0.6 + Math.sin(t*3)*0.12 : 0.35; f.swirl.material.color.set(open ? f.col : LOCKED_COL);
+    f.lock.visible = !open; f.lock.rotation.z = open ? 0 : Math.sin(t*1.5)*0.03;
+  }
   lavaMat.color.setHSL(0.05 + Math.sin(t*1.7)*0.02, 1, 0.52 + Math.sin(t*2.3)*0.06);
   if (!ambFx.visible || !curRegion) return;
   const kind = curRegion.fx, base = AMB_FX[kind].s, cx = cam.target.x, cz = cam.target.z;
@@ -1820,6 +1952,35 @@ function updatePupils(c, head){
     e.m.position.set(e.cx + ox, e.cy + oy, e.cz + e.Rz*Math.sqrt(k)*0.98);
   }
 }
+/* ---- peças das criaturas mitológicas ---- */
+const stormMat = new T.MeshBasicMaterial({color:'#7cc7ff'}), haloMat = new T.MeshBasicMaterial({color:'#ffe066'});
+// par de asas nas costas; bat = asa de morcego (dragão), senão de penas. Batem em syncCreature (c.wings)
+function mythWings(c, torso, mat, tipMat, span, bat){
+  const d = c.d, list = [];
+  for (const side of [-1, 1]){
+    const g = new T.Group(); g.position.set(side*d.tw*0.7, d.th*1.0, d.tl*0.2); g.userData.side = side; torso.add(g);
+    if (bat){
+      add(g, GY, mat, [side*span*0.5, 0.02*span, 0.05*span], [0.045*span, span, 0.045*span], [0, 0, Math.PI/2], true);
+      add(g, GS, tipMat, [side*span*0.5, 0, -span*0.2], [span*0.5, 0.025*span, span*0.3], null, true);
+      for (let i = 0; i < 3; i++) add(g, GS, tipMat, [side*span*(0.2 + i*0.3), 0, -span*0.45], [span*0.15, 0.024*span, span*0.13]);
+      add(g, GC, toon('#efe6cf'), [side*span*1.02, 0.02*span, 0.05*span], [0.05*span, 0.16*span, 0.05*span], [0, 0, -side*Math.PI/2]);
+    } else {
+      for (let i = 0; i < 4; i++) add(g, GS, i === 3 ? tipMat : mat, [side*span*(0.22 + i*0.24), 0.03*span*i, -span*(0.05 + i*0.07)], [span*0.26, 0.035*span, span*(0.36 - i*0.05)], [0, side*0.25, 0], true);
+    }
+    list.push(g);
+  }
+  return list;
+}
+// focinho de serpente (hidra) em cima de uma esfera de raio r já posta
+function serpentFace(h, r, sp, crown){
+  add(h, GS, toon(sp.color), [0, -0.12*r, 0.8*r], [0.68*r, 0.45*r, 0.85*r], null, true);
+  add(h, GS, toon(sp.belly), [0, -0.36*r, 0.78*r], [0.55*r, 0.14*r, 0.7*r]);
+  for (const sx of [-1, 1]){
+    add(h, GC, toon('#ffffff'), [sx*0.26*r, -0.48*r, 1.22*r], [0.06*r, 0.22*r, 0.06*r], [Math.PI, 0, 0]);
+    add(h, GC, crown ? toon('#f2c230') : toon(sp.dark), [sx*0.55*r, 0.35*r, -0.45*r], [0.14*r, 0.6*r, 0.06*r], [-1.0, 0, -sx*0.6], true);
+  }
+  if (crown) add(h, GC, toon('#f2c230'), [0, 0.9*r, -0.1*r], [0.12*r, 0.5*r, 0.12*r], [-0.4, 0, 0], true);
+}
 function makeCreatureMeshes(c){
   const sp = c.sp, d = c.d, s = c.s;
   const body = toon(sp.color), dark = toon(sp.dark), light = toon(sp.belly), black = toon('#16131c'), ivory = toon('#efe6cf'), pink = toon('#e7a0a0');
@@ -1827,7 +1988,8 @@ function makeCreatureMeshes(c){
   const r = d.hr;
   add(head, GS, body, [0,0,0], [r, r, r], null, true);
   let eyeCfg = [0.35, 0.18, 0.84, 0.11, null];
-  let tail = null;
+  let tail = null, wings = null;
+  const st = sp.stage || 0;
   const tailGroup = (x, y, z) => { const g = new T.Group(); g.position.set(x, y, z); torso.add(g); return g; };
   if (c.plan === 'biped'){
     add(torso, GS, body, [0,0,0], [d.tw*1.2, d.th*1.12, d.td*1.3], null, true);
@@ -2047,13 +2209,127 @@ function makeCreatureMeshes(c){
       }
       eyeCfg = [0.45, 0.32, 0.62, 0.075];
       break;
+    // ---- criaturas mitológicas: cada forma ganha algo que nenhum outro bicho tem
+    case 'unicorn': {
+      // Unicórnio -> Alicórnio (asas) -> Unicórnio Celestial (asas grandes, auréola e estrelas); o chifre cresce a cada forma
+      const mane = ['#ff6b6b', '#ffb347', '#ffe066', '#7ac74f', '#6fc3ff', '#b48cff'];
+      add(head, GS, body, [0, -0.2*r, 0.75*r], [0.45*r, 0.45*r, 0.8*r], null, true);
+      add(head, GS, light, [0, -0.3*r, 1.3*r], [0.36*r, 0.3*r, 0.3*r]);
+      for (const sx of [-1, 1]){ add(head, GS, dark, [sx*0.15*r, -0.2*r, 1.58*r], [0.05*r, 0.05*r, 0.03*r]); add(head, GC, body, [sx*0.38*r, 0.85*r, -0.2*r], [0.14*r, 0.42*r, 0.08*r], [0, 0, -sx*0.2], true); }
+      const hl = [0.9, 1.2, 1.5][st], horn = new T.Group(); horn.position.set(0, 0.7*r, 0.45*r); horn.rotation.x = 0.55; head.add(horn);
+      add(horn, GC, toon('#ffd86b'), [0, hl*0.5*r, 0], [0.14*r, hl*r, 0.14*r], null, true);
+      for (let i = 0; i < 4; i++){ const k = (0.12 - i*0.025)*r; add(horn, GTOR, toon('#fff1a8'), [0, (0.15 + i*0.2)*hl*r, 0], [k, k, k], [Math.PI/2, 0, 0]); }
+      // crina e rabo de arco-íris
+      mane.forEach((col, i) => add(head, GC, toon(col), [0, (0.75 - i*0.12)*r, (0.05 - i*0.22)*r], [0.13*r, 0.5*r, 0.13*r], [-0.9 - i*0.1, 0, 0], true));
+      mane.forEach((col, i) => add(torso, GC, toon(col), [0, d.th*1.15, d.tl*(0.75 - i*0.12)], [0.06*s, 0.2*s, 0.05*s], [-0.9, 0, 0]));
+      tail = tailGroup(0, d.th*0.4, -d.tl*1.05);
+      mane.forEach((col, i) => add(tail, GC, toon(col), [(i - 2.5)*0.025*s, -d.th*0.6, -d.tl*0.35], [0.05*s, d.th*2.2, 0.05*s], [-2.5, 0, (i - 2.5)*0.06], true));
+      if (st) wings = mythWings(c, torso, light, toon(st > 1 ? '#ffe066' : '#d8ccff'), d.tw*(st > 1 ? 3.2 : 2.4));
+      if (st > 1){
+        add(head, GTOR, haloMat, [0, 1.35*r, -0.15*r], [0.6*r, 0.6*r, 0.6*r], [Math.PI/2, 0, 0]);
+        for (let i = 0; i < 6; i++){ const a = i/6*TAU; add(torso, new T.OctahedronGeometry(1, 0), haloMat, [Math.cos(a)*d.tw*1.6, d.th*(1.2 + (i % 2)*0.6), Math.sin(a)*d.tl*1.3], [0.05*s, 0.08*s, 0.05*s]); }
+      }
+      eyeCfg = [0.42, 0.22, 0.68, 0.11, '#b48cff'];
+      break;
+    }
+    case 'sphinx': {
+      // Esfinge -> Esfinge Alada (asas douradas) -> Grande Esfinge (asas maiores, colar e coroa dupla do faraó)
+      const gold = toon('#f2c230'), blue = toon('#2f5bb8');
+      add(head, GS, light, [0, -0.25*r, 0.75*r], [0.45*r, 0.35*r, 0.38*r]);
+      add(head, GS, black, [0, -0.12*r, 1.08*r], [0.12*r, 0.09*r, 0.08*r]);
+      // nemes: o pano listrado do faraó cobre o alto da cabeça e cai dos lados
+      add(head, GS, gold, [0, 0.2*r, -0.3*r], [1.08*r, 0.95*r, 0.95*r], null, true);
+      for (let i = 0; i < 4; i++){ const y = 0.75 - i*0.27, k = Math.sqrt(1 - Math.pow((y - 0.2)/0.95, 2))*1.03; add(head, GY, blue, [0, y*r, -0.3*r], [1.08*k*r, 0.13*r, 0.95*k*r]); }
+      for (const sx of [-1, 1]){
+        add(head, GB, gold, [sx*0.95*r, -0.55*r, 0.05*r], [0.3*r, 0.95*r, 0.35*r], null, true);
+        for (let i = 0; i < 3; i++) add(head, GB, blue, [sx*0.95*r, (-0.3 - i*0.25)*r, 0.05*r], [0.32*r, 0.08*r, 0.37*r]);
+      }
+      add(head, GC, gold, [0, 0.95*r, 0.45*r], [0.09*r, 0.32*r, 0.09*r], [0.3, 0, 0], true);   // cobrinha na testa
+      add(head, GY, blue, [0, -0.78*r, 0.72*r], [0.1*r, 0.45*r, 0.1*r], [0.25, 0, 0], true);   // barba de faraó
+      tail = tailGroup(0, d.th*0.3, -d.tl*1.05);
+      add(tail, GY, body, [0, -d.th*0.6, -d.tl*0.4], [0.035*s, d.tl*1.0, 0.035*s], [-0.9, 0, 0], true);
+      add(tail, GS, dark, [0, -d.th*1.15, -d.tl*0.8], [0.07*s, 0.1*s, 0.07*s]);
+      if (st) wings = mythWings(c, torso, gold, blue, d.tw*(st > 1 ? 3.0 : 2.3));
+      if (st > 1){
+        add(torso, GY, gold, [0, d.th*0.55, d.tl*0.9], [d.tw*0.95, d.th*0.25, d.tw*0.9], [0.5, 0, 0]);
+        add(head, GY, toon('#d9472b'), [0, 1.0*r, -0.25*r], [0.55*r, 0.3*r, 0.55*r], null, true);
+        add(head, GY, toon('#ffffff'), [0, 1.3*r, -0.25*r], [0.32*r, 0.6*r, 0.32*r], null, true);
+        add(head, GS, toon('#ffffff'), [0, 1.62*r, -0.25*r], [0.18*r, 0.18*r, 0.18*r]);
+      }
+      eyeCfg = [0.36, 0.15, 0.8, 0.1, '#3b64d6'];
+      break;
+    }
+    case 'griffin': {
+      // Grifo -> Grifo Real (asas maiores, pontas e crista de ouro) -> Grifo Tempestade (raios azuis nas asas)
+      const white = toon('#f7f2e6'), gold = toon('#f2c230'), beak = toon(sp.bird);
+      add(head, GS, white, [0, 0.15*r, -0.15*r], [1.04*r, 0.95*r, 0.95*r], null, true);
+      add(head, GC, beak, [0, -0.1*r, 1.15*r], [0.3*r, 0.8*r, 0.3*r], [Math.PI/2, 0, 0], true);
+      add(head, GS, beak, [0, -0.28*r, 1.45*r], [0.14*r, 0.2*r, 0.12*r]);   // ponta do bico curvada pra baixo
+      for (const sx of [-1, 1]) add(head, GB, toon(sp.dark), [sx*0.32*r, 0.62*r, 0.82*r], [0.4*r, 0.1*r, 0.12*r], [0, 0, sx*0.35]);   // sobrancelha de águia brava
+      for (const sx of [-1, 1]) add(head, GC, white, [sx*0.4*r, 0.75*r, -0.45*r], [0.12*r, 0.5*r, 0.06*r], [-0.8, 0, -sx*0.4], true);
+      for (let i = 0; i < 7; i++){ const a = (i/6 - 0.5)*2.4; add(torso, GC, white, [Math.sin(a)*d.tw*0.9, d.th*0.35, d.tl*0.9], [0.09*s, 0.28*s, 0.05*s], [2.6, 0, a*0.5]); }
+      tail = tailGroup(0, d.th*0.3, -d.tl*1.05);
+      add(tail, GY, body, [0, -d.th*0.6, -d.tl*0.4], [0.035*s, d.tl*1.0, 0.035*s], [-0.9, 0, 0], true);
+      add(tail, GS, dark, [0, -d.th*1.15, -d.tl*0.8], [0.07*s, 0.1*s, 0.07*s]);
+      wings = mythWings(c, torso, dark, st > 1 ? stormMat : st ? gold : white, d.tw*[2.4, 2.9, 3.4][st]);
+      if (st) for (let i = 0; i < 3; i++) add(head, GC, gold, [(i - 1)*0.18*r, 0.9*r, -0.3*r], [0.08*r, 0.55*r, 0.05*r], [-0.7, 0, (i - 1)*0.3], true);
+      if (st > 1) for (const w of wings){
+        const sx = w.userData.side, sp2 = d.tw*3.4;
+        for (let k = 0; k < 3; k++) add(w, GB, stormMat, [sx*sp2*(0.35 + k*0.18), 0.05*sp2, -sp2*(0.05 + (k % 2)*0.12)], [0.16*sp2, 0.02*sp2, 0.03*sp2], [0, sx*(k % 2 ? 0.7 : -0.7), 0]);
+      }
+      eyeCfg = [0.4, 0.28, 0.95, 0.11, '#f2b632'];
+      break;
+    }
+    case 'hydra': {
+      // Hidra: 3 cabeças -> 5 -> 7 (a da física e mais 2, 4 ou 6 em pescoços que balançam); a Ancestral ganha chifres de ouro
+      serpentFace(head, r, sp, st > 1);
+      c.sway = [];
+      const n = [2, 4, 6][st];
+      for (let i = 0; i < n; i++){
+        const side = i % 2 ? 1 : -1, k = (i >> 1) + 1, lean = side*(0.22 + 0.2*k), fwd = 0.2;
+        const neck = new T.Group(); neck.position.set(side*d.tw*(0.25 + 0.2*k), d.th*0.5, d.tl*0.75); neck.rotation.set(fwd, 0, -lean); torso.add(neck);
+        const len = r*(2.6 + 0.45*k), hr = r*0.62;
+        add(neck, GY, body, [0, len/2, 0], [hr*0.5, len, hr*0.5], null, true);
+        add(neck, GY, light, [0, len/2, hr*0.22], [hr*0.36, len*0.95, hr*0.36]);
+        const h = new T.Group(); h.position.y = len; h.rotation.set(-fwd + 0.15, 0, lean); neck.add(h);
+        add(h, GS, body, [0, 0, 0], [hr, hr, hr], null, true);
+        serpentFace(h, hr, sp, st > 1);
+        makeEyes(h, hr, 0.4, 0.3, 0.62, 0.1, '#ffd23f');
+        c.sway.push({g:neck, ph:i*1.7, bz:-lean});
+      }
+      for (let i = 0; i < 6; i++) add(torso, GC, dark, [0, d.th*1.15, d.tl*(0.6 - i*0.28)], [0.06*s, 0.18*s, 0.05*s], [-0.3, 0, 0]);
+      tail = tailGroup(0, 0, -d.tl*1.0);
+      add(tail, GC, body, [0, -d.th*0.1, -d.tl*1.1], [d.tw*0.5, d.tl*2.4, d.tw*0.35], [-Math.PI/2 - 0.08, 0, 0], true);
+      eyeCfg = [0.4, 0.3, 0.62, 0.1, '#ffd23f'];
+      break;
+    }
+    case 'dragon': {
+      // Dragão -> Dragão Ancião (mais chifres, asas maiores) -> Dragão Imperador (chifres de ouro, couro rachado de lava, asas em brasa)
+      const horn = st > 1 ? toon('#f2c230') : ivory;
+      add(head, GS, body, [0, -0.15*r, 0.85*r], [0.55*r, 0.42*r, 0.85*r], null, true);
+      add(head, GS, light, [0, -0.38*r, 0.85*r], [0.45*r, 0.12*r, 0.7*r]);
+      for (const sx of [-1, 1]){
+        add(head, GS, black, [sx*0.18*r, -0.02*r, 1.62*r], [0.06*r, 0.05*r, 0.05*r]);
+        for (let i = 0; i <= st; i++) add(head, GC, horn, [sx*(0.45 + i*0.12)*r, (0.7 - i*0.15)*r, (-0.35 - i*0.2)*r], [0.13*r, (0.75 + 0.15*i)*r, 0.13*r], [-1.1, 0, -sx*(0.35 + i*0.25)], true);
+        for (let i = 0; i < 3; i++) add(head, GC, ivory, [sx*0.3*r, -0.45*r, (1.0 + i*0.22)*r], [0.05*r, 0.14*r, 0.05*r], [Math.PI, 0, 0]);
+      }
+      for (let i = 0; i < 7; i++) add(torso, GC, st > 1 ? emberMat : dark, [0, d.th*1.15, d.tl*(0.8 - i*0.27)], [0.07*s, 0.2*s, 0.05*s], [-0.35, 0, 0]);
+      tail = tailGroup(0, 0, -d.tl*1.0);
+      add(tail, GC, body, [0, -d.th*0.05, -d.tl*1.1], [d.tw*0.5, d.tl*2.3, d.tw*0.35], [-Math.PI/2 - 0.1, 0, 0], true);
+      add(tail, new T.OctahedronGeometry(1, 0), st > 1 ? emberMat : dark, [0, -d.th*0.25, -d.tl*2.25], [0.18*s, 0.05*s, 0.24*s]);
+      wings = mythWings(c, torso, dark, toon(st > 1 ? '#ff7a2a' : st ? '#a8321e' : '#8a2a1e'), d.tw*[2.5, 3.1, 3.7][st], true);
+      if (st > 1) for (let i = 0; i < 9; i++){ const a = rand(-1.3, 1.3); add(torso, GB, emberMat, [Math.sin(a)*d.tw*1.18, Math.cos(a)*d.th*1.2, rand(-0.8, 0.8)*d.tl], [0.03*s, 0.03*s, rand(0.15, 0.3)*s], [0, rand(-0.6, 0.6), a]); }
+      eyeCfg = [0.42, 0.2, 0.7, 0.09, st > 1 ? '#ff6a1f' : '#f2c230'];
+      break;
+    }
   }
   const ey = makeEyes(head, r, eyeCfg[0], eyeCfg[1], eyeCfg[2], eyeCfg[3], eyeCfg[4]);
   // boca boba: sorriso torto, língua que escapa e dentes de coelho
   let mouth = null, tongue = null;
   if (!sp.bird){
     const MZ = {bear:1.12, gorilla:1.02, kangaroo:1.22, monkey:1.02, rhino:1.5, boar:1.32, wolf:1.5, cheetah:1.0, fox:1.38,
-      armadillo:1.25, lizard:1.4, salamander:1.4, yak:1.25, buffalo:1.25, hare:1.1, gator:2.1, frog:1.25, capybara:1.65};
+      armadillo:1.25, lizard:1.4, salamander:1.4, yak:1.25, buffalo:1.25, hare:1.1, gator:2.1, frog:1.25, capybara:1.65,
+      unicorn:1.55, sphinx:1.12, hydra:1.55, dragon:1.65};
     const mz = (MZ[sp.feat] || 1.0)*r*0.9, my = sp.plan === 'quad' ? -0.36*r : -0.42*r;
     mouth = add(head, GS, toon('#5a1a24'), [0.03*r, my, mz], [0.2*r, 0.07*r, 0.07*r], [0, 0, 0.12]);
     tongue = add(head, GS, toon('#ff7b93'), [0.07*r, my - 0.13*r, mz + 0.02*r], [0.1*r, 0.17*r, 0.05*r], null, true);
@@ -2088,7 +2364,7 @@ function makeCreatureMeshes(c){
     list = [...legs, torso, head];
   }
   list.forEach(m => scene.add(m));
-  c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.pupils = ey.pupils; c.tail = tail; c.mouth = mouth; c.tongue = tongue; c.blepT = 0;
+  c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.pupils = ey.pupils; c.tail = tail; c.wings = wings; c.mouth = mouth; c.tongue = tongue; c.blepT = 0;
 }
 
 // Roupa das formas evoluídas. Guerreiro: shorts, cinto e munhequeira, mais um detalhe da classe.
@@ -2156,7 +2432,7 @@ let creatures = [];
 function makeCreature(member, x, z, role){
   const sp = formOf(member);
   const st = stats(member);
-  const s = sp.size*(1 + 0.012*(member.level - 1));
+  const s = sp.size*(1 + 0.012*(member.level - 1))*(isBoss(member) ? 1.2 : 1);
   const slot = creatureSeq++;   // só serve pra defasar animações entre animais
   const m = 1 + (st.str - 10)*0.02;
   const mk = (shape, mass, px, py, pz) => {
@@ -2273,6 +2549,9 @@ function syncCreature(c){
   if (!c.removed || c.role === 'puppet') updatePupils(c, head);
   const hs = c.role === 'puppet' && c._hv ? Math.hypot(c._hv.x, c._hv.z) : Math.hypot(c.torso.velocity.x, c.torso.velocity.z);
   if (c.tail) c.tail.rotation.y = Math.sin(clock*(hs > 0.5 ? 14 : 5) + c.slot)*(ko ? 0 : hs > 0.5 ? 0.5 : 0.25);
+  // asas batem forte correndo ou no ar; pescoços extras da hidra balançam
+  if (c.wings){ const fast = hs > 0.5 || !c.grounded; for (const w of c.wings){ const sd = w.userData.side; w.rotation.z = ko ? -sd*0.3 : sd*(0.25 + Math.sin(clock*(fast ? 11 : 2.2) + c.slot)*(fast ? 0.55 : 0.12)); } }
+  if (c.sway) for (const n of c.sway){ n.g.rotation.z = n.bz + (ko ? 0 : Math.sin(clock*2.2 + n.ph)*0.15); n.g.rotation.y = ko ? 0 : Math.sin(clock*1.6 + n.ph)*0.2; }
   if (c.tongue){
     c.blepT -= 1/60;
     if (c.blepT < -4 && Math.random() < 0.004) c.blepT = rand(0.8, 1.6);
@@ -2531,7 +2810,7 @@ function throwRock(c, target){
   b.isRock = true; b.thrower = c; b.spent = false; b.born = clock;
   b.addEventListener('collide', e => onCollide(b, e.body));
   world.addBody(b);
-  const m = mesh(rockGeo, toon(c.sp.rock || '#8f887b')); scene.add(m);
+  const m = mesh(rockGeo, c.sp.feat === 'dragon' ? emberMat : toon(c.sp.rock || '#8f887b')); scene.add(m);
   rocks.push({body:b, mesh:m});
 }
 
@@ -2818,6 +3097,12 @@ function updateSpawns(dt){
     const n = creatures.filter(c => c.patch === p && (c.role === 'wild' || c.role === 'enemy')).length;
     if (n < PER_PATCH && p.timer <= 0){ if (spawnWild(p, true)) p.timer = rand(5, 9); else p.timer = 1; }
   }
+  // chefe do mapa: volta pro covil enquanto não for vencido (se você perdeu, ele reaparece inteiro)
+  for (const b of BOSSES){
+    if (b.region !== curRegion.id || game.bosses[b.region] || (b.c && !b.c.dead)) continue;
+    if (Math.hypot(b.x - trainer.pos.x, b.z - trainer.pos.z) < 7 || creatures.length > MAX_CREATURES - 3) continue;
+    spawnBoss(b);
+  }
   // animais que se perderam (caíram ou saíram muito da área) voltam pro mato
   for (const w of wilds()){
     if (w.removed) continue;
@@ -2910,7 +3195,11 @@ function startBattle(w){
   ringMesh.position.set(center.x, 0.04, center.z); ringMesh.visible = true;
   w.parts.forEach(p => p.velocity.y += 4);
   floatText({x:wp.x, y:wp.y + 1.2, z:wp.z}, '!', '#ff5a36', 44);
-  toast(`Um ${w.member.nick} selvagem (Nv. ${w.member.level}, ${ATTR[w.sp.attr].name}) apareceu! Vai, ${battle.mon.member.nick}!`);
+  if (w.boss){
+    shake(0.4); shockwave(wp.x, wp.z, '#d9472b', 5);
+    showEvoText('Chefe!', w.member.nick); setTimeout(() => { if (!evo) showEvoText('', ''); }, 2200);
+    toast(`${w.member.nick} (Nv. ${w.member.level}, ${ATTR[w.sp.attr].name}) quer briga! Vai, ${battle.mon.member.nick}!`);
+  } else toast(`Um ${w.member.nick} selvagem (Nv. ${w.member.level}, ${ATTR[w.sp.attr].name}) apareceu! Vai, ${battle.mon.member.nick}!`);
   setHud();
 }
 function endBattle(result){ if (!battle || battle.over) return; battle.over = true; battle.result = result; battle.endT = result === 'flee' ? 0.3 : 1.8; }
@@ -2996,19 +3285,23 @@ function stepEvo(dt){
     scene.remove(e.fx); e.fx.traverse(o => { if (o.material) o.material.dispose(); if (o.geometry && o.geometry !== GS) o.geometry.dispose(); });
     evo = null; mode = 'world';
     setTimeout(() => { if (!evo) showEvoText('', ''); }, 1000);
-    toast(`${e.before} virou ${EVO_TIER[stageOf(e.c.member)]}: ${e.nu}! FOR, AGI e INT subiram.`);
+    toast(`${e.before} virou ${tierName(e.c.member)}: ${e.nu}! FOR, AGI e INT subiram.`);
     save(); setHud(); runEvolutions();
   }
 }
 function finishBattle(){
-  const r = battle.result, W = battle.wild, lead = battle.member, log = [];
+  const r = battle.result, W = battle.wild, lead = battle.member, log = [], B = W.boss, bk = B ? 2 : 1;
+  let bossMsg = null;
   if (r === 'win' || r === 'capture'){
+    if (B) bossMsg = bossReward(B, r);
     if (r === 'capture'){
+      // chefe capturado perde os PV extras de covil, mas continua com coroa e 10% a mais nos atributos
+      if (W.member.wildBoss){ const old = W.member.maxHp; delete W.member.wildBoss; W.member.maxHp = stats(W.member).maxHp; W.member.hp = Math.round(W.member.hp*W.member.maxHp/old); }
       W.member.hp = Math.max(1, W.member.hp);
       if (game.team.length < TEAM_MAX){ game.team.push(W.member); log.push(`${W.member.nick} (Nv. ${W.member.level}) entrou pro seu time!`); }
       else { game.box.push(W.member); log.push(`Time cheio: ${W.member.nick} foi pra Caixa de Animais, ao lado do Centro de Cura.`); }
     }
-    const xp = Math.round((r === 'capture' ? 10 : 15) + 10*W.member.level);
+    const xp = Math.round(((r === 'capture' ? 10 : 15) + 10*W.member.level)*bk);
     trainer.cheerT = Math.max(trainer.cheerT, 1.8);
     // todos os animais vivos do time ganham XP: quem lutou ganha cheio, quem ficou na reserva ganha metade
     const alive = game.team.filter(m => m.hp > 0 && m !== W.member);
@@ -3020,10 +3313,10 @@ function finishBattle(){
     if (fighters.length) log.push(`${fighters.map(m => m.nick).join(' e ')} ${fighters.length > 1 ? 'lutaram e ganharam' : 'lutou e ganhou'} ${xp} XP.`);
     if (bench.length) log.push(`Na reserva: ${bench.map(m => m.nick).join(', ')} ${bench.length > 1 ? 'ganharam' : 'ganhou'} ${half} XP.`);
     for (const m of alive) levelUp(m, log);
-    const coins = Math.round((r === 'capture' ? 10 : 25) + (r === 'capture' ? 5 : 10)*W.member.level);
+    const coins = Math.round(((r === 'capture' ? 10 : 25) + (r === 'capture' ? 5 : 10)*W.member.level)*(B ? 3 : 1));
     game.money += coins; log.push(`Você ganhou ${coins} moedas.`);
   }
-  if (r === 'flee'){ log.push('Você fugiu!'); W.role = 'wild'; W.cool = 6; W.ai = {t:0, target:null}; W.input = {}; W.confused = 0; }
+  if (r === 'flee'){ log.push('Você fugiu!'); W.role = 'wild'; W.cool = 6; W.ai = {t:0, target:null}; W.input = {}; W.confused = 0; if (B) W.member.hp = W.member.maxHp; }
   else if (!W.dead) destroyCreature(W);
   const mon = battle.mon;
   battle = null; mode = 'world';
@@ -3035,9 +3328,11 @@ function finishBattle(){
   }
   if (mon.dead || mon.fainted){ if (!mon.dead) destroyCreature(mon); spawnFollower(); }
   else { mon.role = 'follower'; follower = mon; mon.input = {}; mon.confused = 0; }
+  if (bossMsg) log.unshift(bossMsg);
   log.forEach((l, i) => setTimeout(() => toast(l), i*400));
   save(); setHud();
-  runEvolutions();
+  // a faixa da chave aparece primeiro; a evolução (se tiver) vem depois
+  if (bossMsg) setTimeout(runEvolutions, 2800); else runEvolutions();
 }
 function blackout(){
   $('fade').style.opacity = 1;
@@ -3097,7 +3392,8 @@ function startCapture(ballBody){
   const hpR = W.member.hp/W.member.maxHp;
   const it = ITEMS[ballBody.item];
   const base = 0.12 + 0.72*(1 - hpR) + (W.ko > 0 ? 0.2 : 0) + (W.confused > 0 ? 0.08 : 0);
-  const chance = it.mult >= 99 ? 1 : clamp(base*it.mult, 0.05, 0.97);
+  // chefe resiste: só 40% da chance normal (a Semente Dourada continua garantida)
+  const chance = it.mult >= 99 ? 1 : clamp(base*it.mult*(W.member.wildBoss ? 0.4 : 1), 0.05, 0.97);
   const success = Math.random() < chance;
   const breakAt = success ? 99 : (Math.random() < chance ? 3 : Math.random() < 0.5 ? 2 : 1);
   // cipós e folhas puxam o animal pra dentro da casca
@@ -3514,9 +3810,12 @@ function step(dt){
     for (const w of wilds()) if (!w.removed) aiWander(w, dt);
     const spot = SPOTS.find(s => Math.hypot(trainer.pos.x - s.x, trainer.pos.z - s.z) < s.r);
     const np = net.room ? netWorldStep() : null;
-    if (np) setPrompt(np.text, np.key); else setPrompt(spot ? (spot.kind === 'portal' ? `E: viajar para ${REGIONS[spot.to].name}` : SPOT_TEXT[spot.kind]) : '', 'KeyE');
+    if (np) setPrompt(np.text, np.key); else setPrompt(spot ? (spot.kind === 'portal' ? (unlocked(spot.to) ? `E: viajar para ${REGIONS[spot.to].name}` : `Trancado: precisa da ${KEY_NAMES[spot.to]}`) : SPOT_TEXT[spot.kind]) : '', 'KeyE');
     if (spot && pressed.KeyE){
-      if (spot.kind === 'portal'){ travel(spot); for (const k in pressed) delete pressed[k]; return; }
+      if (spot.kind === 'portal'){
+        if (!unlocked(spot.to)) toast(lockMsg(spot.to));
+        else { travel(spot); for (const k in pressed) delete pressed[k]; return; }
+      }
       if (spot.kind === 'heal'){ healAll(); toast('Seu time foi curado!'); }
       else if (spot.kind === 'shop') showShop();
       else if (spot.kind === 'box') showBox();
@@ -3590,13 +3889,162 @@ function step(dt){
     if (p.m.position.y < 0.05){ p.m.position.y = 0.05; p.vy *= -0.3; p.vx *= 0.7; p.vz *= 0.7; }
     if (p.life <= 0){ scene.remove(p.m); particles.splice(i, 1); }
   }
-  updatePuffs(dt);
+  updatePuffs(dt); updateKeyFx(dt);
   for (let i = rings.length - 1; i >= 0; i--){
     const r = rings[i]; r.t += dt; const k = r.t/0.5;
     r.m.scale.setScalar(1 + k*r.max); r.m.material.opacity = 1 - k;
     if (k >= 1){ scene.remove(r.m); rings.splice(i, 1); }
   }
 }
+
+/* ================= Estilos visuais (pós-processamento) ================= */
+// a cena é desenhada numa textura (cor + profundidade) e um shader de tela cheia aplica o estilo
+const POST_FS = `
+uniform sampler2D tCol, tDep; uniform vec2 res; uniform float mode, seed, pr;
+varying vec2 vUv;
+float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7)))*43758.5453); }
+float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3. - 2.*f);
+  return mix(mix(h(i), h(i + vec2(1., 0.)), f.x), mix(h(i + vec2(0., 1.)), h(i + 1.), f.x), f.y); }
+float fbm(vec2 p){ float s = 0., a = .5; for (int i = 0; i < 4; i++){ s += a*n(p); p *= 2.03; a *= .5; } return s; }
+float dep(vec2 uv){ return texture2D(tDep, uv).x*300.; }
+vec3 col(vec2 uv){ return texture2D(tCol, uv).rgb; }
+float lum(vec3 c){ return dot(c, vec3(.299, .587, .114)); }
+vec3 sat(vec3 c, float k){ return mix(vec3(lum(c)), c, k); }
+// borda: salto de profundidade (silhuetas) + salto de cor (detalhes)
+float edge(vec2 uv, float w, float kc){
+  vec2 o = w/res; float d = dep(uv); vec3 c = col(uv);
+  float e = 0.;
+  e = max(e, abs(dep(uv + vec2(o.x, 0.)) - d)); e = max(e, abs(dep(uv - vec2(o.x, 0.)) - d));
+  e = max(e, abs(dep(uv + vec2(0., o.y)) - d)); e = max(e, abs(dep(uv - vec2(0., o.y)) - d));
+  float ec = length(col(uv + vec2(o.x, 0.)) - c) + length(col(uv + vec2(0., o.y)) - c);
+  return max(smoothstep(.25, .6, e), smoothstep(.35, .7, ec*kc));
+}
+float bayer2(vec2 a){ a = floor(a); return fract(dot(a, vec2(.5, a.y*.75))); }
+float bayer4(vec2 a){ return bayer2(.5*a)*.25 + bayer2(a); }
+void main(){
+  vec2 uv = vUv, p = gl_FragCoord.xy/pr;
+  vec3 c = col(uv);
+  // texto de placa (alfa 0): sem filtro, senão as letras viram borrão
+  if (texture2D(tCol, uv).a < .5){ gl_FragColor = vec4(c, 1.); return; }
+  if (mode < 1.5){           // GIBI: retícula de pontos nas sombras, tinta grossa, papel de revista
+    c = sat(c, 1.3);
+    float l = lum(c);
+    // bolinhas pequenas e suaves, só nas sombras de verdade
+    vec2 q = mat2(.707, -.707, .707, .707)*p/4.;
+    float d = length(fract(q) - .5);
+    float r = clamp((.62 - l)*.8, 0., .32);
+    c = mix(c, c*.66, 1. - smoothstep(r - .05, r + .05, d));
+    float e = edge(uv, 1.*pr, .7);
+    c = mix(c, vec3(.1, .08, .12), e*.85);
+    c *= vec3(1.03, 1., .92)*(.95 + .05*fbm(p*.4));
+  } else if (mode < 2.5){     // AQUARELA: tinta que escorre, bordas escurecidas, papel granulado
+    vec2 w = (vec2(fbm(p*.02), fbm(p*.02 + 7.)) - .5)*14./res*pr;
+    vec2 u2 = uv + w;
+    vec3 b = (col(u2) + col(u2 + vec2(3., 0.)/res*pr) + col(u2 - vec2(0., 3.)/res*pr) + col(u2 + vec2(-3., 3.)/res*pr))*.25;
+    vec3 bb = (col(u2 + vec2(9., 0.)/res*pr) + col(u2 - vec2(9., 0.)/res*pr) + col(u2 + vec2(0., 9.)/res*pr) + col(u2 - vec2(0., 9.)/res*pr))*.25;
+    c = sat(b, .85);
+    c = mix(c, vec3(1.), .12);
+    float wet = clamp(length(b - bb)*2.2, 0., 1.);
+    c *= 1. - wet*.35;
+    c *= .86 + .2*fbm(p*.35 + fbm(p*.05)*4.);
+    float e = edge(u2, 1.2*pr, .6);
+    c = mix(c, c*vec3(.45, .38, .42), e*.55);
+    float paper = fbm(p*.9);
+    c *= vec3(1.02, 1., .95)*(.93 + .08*paper);
+    vec2 v = vUv - .5; c = mix(c, vec3(.98, .96, .9), smoothstep(.45, .75, length(v*vec2(1., 1.2))));
+  } else if (mode < 3.5){     // PIXEL 16-BIT: resolução baixa, paleta curta com pontilhado e contorno colorido
+    vec2 cell = floor(uv*res);
+    c = sat(c, 1.2);
+    float e = edge(uv, 1., 1.3);
+    c = mix(c, c*.3 + vec3(.04, .02, .08), e);
+    float t = bayer4(cell) - .5;
+    c = floor(c*6. + t*.45 + .5)/6.;
+  } else if (mode < 4.5){     // MASSINHA: stop-motion com sombra de contato, digitais e miniatura (tilt-shift)
+    vec2 j = (vec2(n(uv*7. + seed), n(uv*7. - seed)) - .5)*2.2/res*pr;
+    vec2 u2 = uv + j;
+    float tilt = smoothstep(.22, .48, abs(vUv.y - .45));
+    vec3 s = vec3(0.); float tw = 0.;
+    for (int i = 0; i < 8; i++){ float a = float(i)*.785; vec2 o = vec2(cos(a), sin(a))*tilt*5.*pr/res; s += col(u2 + o); tw += 1.; }
+    c = mix(col(u2), s/tw, tilt);
+    float d = dep(u2), ao = 0.;
+    for (int i = 0; i < 8; i++){ float a = float(i)*.785 + .3; vec2 o = vec2(cos(a), sin(a))*7.*pr/res; float dd = d - dep(u2 + o); ao += smoothstep(.05, .5, dd)*(1. - smoothstep(1.5, 3., dd)); }
+    c *= 1. - ao/8.*.45;
+    c = sat(c, 1.18)*vec3(1.05, 1., .93);
+    float fp = sin(length(p - vec2(400., 300.))*.9 + fbm(p*.05 + seed)*9.);
+    c *= 1. + .03*fp*(1. - tilt);
+    c *= .97 + .05*n(p*.6 + seed*13.);
+    vec2 v = vUv - .5; c *= 1. - .35*smoothstep(.35, .85, length(v));
+  } else {                    // CORDEL: xilogravura, tinta preta, hachuras talhadas, papel de folheto
+    vec3 paper = vec3(.95, .89, .76)*(.93 + .07*fbm(p*.5));
+    vec3 ink = vec3(.12, .08, .07);
+    float l = lum(c);
+    // cores chapadas de tinta de gráfica, poucas por canal
+    vec3 chap = floor(sat(c, 1.5)*3. + .35)/3.;
+    vec3 o = mix(paper, paper*chap*1.25, .85);
+    // marcas da goiva: veios claros no meio da cor
+    float wob = fbm(p*.04)*6.;
+    o *= .9 + .1*step(.45, n(vec2(p.x*.025, p.y*.45) + wob));
+    float hatch = sin((p.x + p.y)*.6 + wob);
+    if (l < .36) o = mix(o, ink, step(.2, hatch));
+    if (l < .17) o = ink;
+    float e = edge(uv, 2.*pr, 1.6);
+    e *= .4 + .6*step(.2, n(p*.2));
+    o = mix(o, ink, step(.3, e));
+    c = o;
+  }
+  gl_FragColor = vec4(c, 1.);
+}`;
+const post = (() => {
+  const mat = new T.ShaderMaterial({
+    uniforms:{tCol:{value:null}, tDep:{value:null}, res:{value:new T.Vector2()}, mode:{value:1}, seed:{value:0}, pr:{value:1}},
+    vertexShader:'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0., 1.); }',
+    fragmentShader:POST_FS, depthTest:false, depthWrite:false,
+  });
+  const quad = new T.Mesh(new T.PlaneGeometry(2, 2), mat); quad.frustumCulled = false;
+  const qs = new T.Scene(); qs.add(quad);
+  return {mat, qs, qc:new T.OrthographicCamera(-1, 1, 1, -1, 0, 1), rt:null, w:0, h:0, frame:0};
+})();
+// gradiente de luz dos materiais toon: degraus duros, poucos tons ou liso (massinha)
+const smoothGrad = (a, b) => Array.from({length:32}, (_, i) => Math.round(a + (b - a)*i/31));
+const STYLES = {
+  atual:    {mode:0, grad:[120, 190, 255], line:'#2a2140'},
+  gibi:     {mode:1, grad:[150, 255], line:'#1e1828'},
+  aquarela: {mode:2, grad:smoothGrad(150, 255), line:'#6a5878', soft:true},
+  pixel:    {mode:3, grad:[110, 185, 255], line:'#2a2140', scale:1/3},
+  massinha: {mode:4, grad:smoothGrad(95, 255), line:null, soft:true, hold:5},
+  cordel:   {mode:5, grad:[70, 255], line:'#1e1410'},
+};
+let style = STYLES.atual;
+function setStyle(name){
+  style = STYLES[name] || STYLES.gibi;
+  const g = new Uint8Array(style.grad);
+  toonGrad.image = {data:g, width:g.length, height:1};
+  toonGrad.minFilter = toonGrad.magFilter = style.soft ? T.LinearFilter : T.NearestFilter;
+  toonGrad.needsUpdate = true;
+  OUTLINE.visible = !!style.line; if (style.line) OUTLINE.color.set(style.line);
+  post.w = 0;
+  return name;
+}
+function drawFrame(){
+  if (!style.mode){ renderer.render(scene, camera); return; }
+  const pr = renderer.getPixelRatio(), k = style.scale ? style.scale/pr : 1;
+  const w = Math.max(1, Math.round(innerWidth*pr*k)), h = Math.max(1, Math.round(innerHeight*pr*k));
+  if (post.w !== w || post.h !== h){
+    if (post.rt) post.rt.dispose();
+    post.rt = new T.WebGLRenderTarget(w, h, {minFilter:T.NearestFilter, magFilter:T.NearestFilter, depthTexture:new T.DepthTexture(w, h)});
+    post.w = w; post.h = h; post.frame = 0;
+  }
+  const u = post.mat.uniforms;
+  // massinha: segura cada quadro por alguns frames, como animação quadro a quadro
+  if (!style.hold || post.frame++ % style.hold === 0){
+    renderer.setRenderTarget(post.rt); renderer.render(scene, camera); renderer.setRenderTarget(null);
+    u.seed.value = Math.random()*50;
+  }
+  u.tCol.value = post.rt.texture; u.tDep.value = post.rt.depthTexture;
+  u.res.value.set(w, h); u.mode.value = style.mode; u.pr.value = pr*k;
+  renderer.render(post.qs, post.qc);
+}
+setStyle(new URLSearchParams(location.search).get('estilo') || 'gibi');
 
 function render(){
   for (const c of creatures) syncCreature(c);
@@ -3633,7 +4081,7 @@ function render(){
   camera.position.copy(cam.target).add(ISO).add(sh);
   camera.lookAt(cam.target.clone().add(sh));
   sun.position.set(cam.target.x + 10, 22, cam.target.z + 6); sun.target.position.copy(cam.target);
-  renderer.render(scene, camera);
+  drawFrame();
   for (let i = floats.length - 1; i >= 0; i--){
     const f = floats[i]; f.life -= 1/60; f.p.y += 0.02;
     const v = f.p.clone().project(camera);
@@ -3718,7 +4166,7 @@ function monCard(m, opts={}){
     <img src="${portrait(m)}" alt="${sp.name}">
     <div class="t">${m.nick}${chip(sp.attr)}</div>
     ${opts.starter ? `<p>${sp.desc}</p>` : `<div class="small">Nv. ${m.level} · XP ${m.xp}/${xpNext(m)} · PV ${Math.ceil(m.hp)}/${m.maxHp}</div>`}
-    <div class="small">${EVO_TIER[st]}${m.nick !== sp.name ? ` (${sp.name})` : ''} · ${evo}</div>
+    <div class="small">${tierName(m)}${m.nick !== sp.name ? ` (${sp.name})` : ''} · ${evo}</div>
     ${attrBars(m)}
     <div class="small">Especial: ${sp.specialName} · ${sp.plan === 'quad' ? 'ataca mordendo' : 'ataca socando'}</div>
     <div class="small">Velocidade ${s.speed.toFixed(2)} · Esquiva ${Math.round(s.dodge*100)}% · Recarga do especial ${s.specCd.toFixed(1)}s</div>
@@ -3738,10 +4186,11 @@ function showTitle(){
       <div><kbd>E</kbd> segurar: agarrar ou morder e segurar</div><div><kbd>Espaço</kbd> pular, ou levantar quem você pegou</div>
       <div><kbd>F</kbd> golpe especial do animal</div><div><kbd>R</kbd> ou botão direito: arremessar bolota na mira</div>
       <div><kbd>Z</kbd> mochila · <kbd>C</kbd> troca captura · <kbd>X</kbd> fugir</div><div><kbd>E</kbd> no tapete: loja, Centro de Cura, Caixa de Animais e portais pros 5 mapas</div>
+      <div style="grid-column:1/-1">Chefes: cada mapa tem um chefe de coroa no covil. Vença ou capture ele pra ganhar a chave do próximo mapa.</div>
       <div style="grid-column:1/-1">Evolução: no Nv. ${EVO_LV[0]} o animal vira Guerreiro e fica de pé; no Nv. ${EVO_LV[1]} vira Mestre, quase gente.</div>
     </div>`;
   $('card').querySelectorAll('[data-starter]').forEach(b => b.onclick = () => {
-    game = {team:[newMember(b.dataset.starter, 5)], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota'};
+    game = {team:[newMember(b.dataset.starter, 5)], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota', keys:[], bosses:{}};
     save(); enterWorld(); toast(`Você escolheu ${SPECIES[b.dataset.starter].name}! Procure animais no mato alto.`);
   });
 }
@@ -3863,6 +4312,11 @@ function showBag(){
     <div class="sect">Captura</div>
     ${cap.length ? `<div class="items">${cap.map(k => itemCard(k, `<span class="qty">×${count(k)}</span><button data-sel="${k}" ${game.sel === k ? 'disabled' : ''}>${game.sel === k ? 'Equipado' : 'Equipar'}</button>`, game.sel === k)).join('')}</div>` : '<p class="hint">Nenhum item de captura. Compre na loja.</p>'}
     <p class="hint">O item equipado é o que você arremessa com R ou botão direito.</p>
+    <div class="sect">Chefes e chaves</div>
+    <div class="bosses">${BOSSES.map(b => {
+      const done = game.bosses[b.region], prize = KEY_NAMES[b.region + 1] || 'Coroa da Cratera';
+      return `<div class="boss ${done ? 'done' : ''}"><b>${b.name}</b><span class="small">${REGIONS[b.region].name} · Nv. ${b.level}</span><span class="small">${done ? (done === 'capture' ? 'Capturado' : 'Vencido') + ` · ganhou ${prize}` : unlocked(b.region) ? `No covil · deixa a ${prize}` : 'Mapa ainda trancado'}</span></div>`;
+    }).join('')}</div>
     <div class="actions"><button class="primary" id="closeMenu">Fechar (Z)</button></div>`;
   openMenu('bag', html);
   $('closeMenu').onclick = () => { bagPick = null; closeMenu(); };
