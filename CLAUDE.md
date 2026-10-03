@@ -83,6 +83,9 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
 - `makeCreatureMeshes` switches on `feat`.
 - `add(parent, geo, mat, pos, scale, rot, shadow=true)` automatically adds an inverted-hull outline.
 - Googly eyes use `updatePupils()`, a spring per pupil driven by the head's world acceleration and gravity. The same function animates the trainer and NPC eyes.
+- **Art style (post-processing):** `render()` calls `drawFrame()`, which draws the scene into a render target (color + depth) and runs the fullscreen shader `POST_FS` on it.
+  - `STYLES` holds the presets (`gibi` is the default; `atual`, `aquarela`, `pixel`, `massinha` and `cordel` are alternatives). Each sets the shader `mode`, the toon gradient (`grad`) and the outline color (`line`). `setStyle(name)` switches at runtime; `?estilo=<name>` in the URL picks one.
+  - Text faces must use `signFace(lines)`: it writes alpha 0, and the shader leaves those pixels unfiltered so the letters stay legible.
 - `syncCreature` copies body transforms to meshes. It skips this for `role === 'puppet'`, whose meshes are driven directly from network snapshots.
 
 **Game flow:**
