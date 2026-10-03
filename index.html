@@ -93,7 +93,13 @@ button:disabled{opacity:.45;cursor:not-allowed}
 #prompt{cursor:pointer}
 .bubble{position:fixed;left:0;top:0;max-width:230px;padding:6px 10px;background:var(--panel);color:var(--ink);border:3px solid var(--line);border-radius:14px;font-weight:800;font-size:13px;line-height:1.3;pointer-events:none;box-shadow:0 3px 0 var(--line);text-wrap:pretty}
 #area{position:fixed;left:50%;top:calc(66px + env(safe-area-inset-top,0px));transform:translateX(-50%);font-family:var(--display);font-size:clamp(24px,4.5vw,38px);color:#fff;-webkit-text-stroke:3px #2a2140;paint-order:stroke fill;text-shadow:0 4px 0 #2a2140;pointer-events:none;opacity:0;transition:opacity .5s;white-space:nowrap}
-#area.show{opacity:1}@media (prefers-reduced-motion:reduce){#area{transition:none}}
+#area.show{opacity:1}
+#evo{position:fixed;left:50%;top:22%;transform:translate(-50%,-50%) scale(.9);text-align:center;font-family:var(--display);color:#fff;-webkit-text-stroke:3px #2a2140;paint-order:stroke fill;text-shadow:0 4px 0 #2a2140;pointer-events:none;opacity:0;transition:opacity .4s,transform .4s;width:min(92vw,900px)}
+#evo.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#evo b{display:block;font-weight:400;font-size:clamp(22px,4.5vw,36px)}
+#evo span{display:block;font-size:clamp(40px,9vw,80px);line-height:1.05;color:#ffd84a}
+#flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .9s}
+@media (prefers-reduced-motion:reduce){#evo,#flash{transition:none}}@media (prefers-reduced-motion:reduce){#area{transition:none}}
 #capSel img{width:22px;height:22px;margin:-4px 0}
 .shophead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
 .coins{font-family:var(--display);font-size:22px;color:#b8860b;font-variant-numeric:tabular-nums}
@@ -136,6 +142,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 <div id="prompt" class="card-ui" hidden></div>
 <div id="toasts"></div>
 <div id="help" hidden></div>
+<div id="evo"><b></b><span></span></div>
+<div id="flash"></div>
 <div id="fade"></div>
 <div id="touch">
   <div class="pad"><span></span><button data-k="KeyW">▲</button><span></span><button data-k="KeyA">◀</button><button data-k="KeyE">E</button><button data-k="KeyD">▶</button><span></span><button data-k="KeyS">▼</button><span></span></div>
@@ -212,9 +220,35 @@ const SPECIES = {
     base:[7,10,17], grow:[1.1,1.6,3.1], special:'hypno', specialName:'Brilho da Fênix', desc:'Brilha tanto que o inimigo fica zonzo e confuso.'}
 };
 const STARTERS = ['urso','lobo','macaco'];
+// Evoluções no estilo Digimon: a forma depende só do nível. No EVO_LV[0] o animal vira Guerreiro (fica de pé
+// e ganha roupa), no EVO_LV[1] vira Mestre (mais alto, cabeça menor, armadura/capa). Cada forma parece mais gente.
+const EVO_LV = [15, 25];
+const EVO_TIER = ['Animal', 'Guerreiro', 'Mestre'];
+const EVO_NAMES = {
+  urso:['Ursoldado','Generurso'], gorila:['Gorilutador','Gorimperador'], rinoceronte:['Rinocavaleiro','Rinotitã'], javali:['Javaliente','Javalorde'],
+  lobo:['Lobisomem','Lobonin'], guepardo:['Guepardleta','Relampardo'], canguru:['Canguboxe','Cangurulenda'], macaco:['Macacientista','Macacomago'],
+  coruja:['Corujuíza','Arquicoruja'], raposa:['Raposábia','Nove-Caudas'], tatu:['Tatuerreiro','Tatublindado'], calango:['Calangaceiro','Calampião'],
+  carcara:['Carcavaqueiro','Carcarapajé'], iaque:['Iaquerreiro','Iaquelosso'], lebre:['Lebreninja','Lebrelâmina'], pinguim:['Pinguinventor','Pinguimperador'],
+  jacare:['Jacaraté','Jacarei'], sapo:['Sapoeira','Mestre Sapão'], capivara:['Capimonge','Capiguru'], bufalo:['Bufaferreiro','Vulcabúfalo'],
+  salamandra:['Salamaninja','Salamandragão'], fenix:['Fênix Maga','Fênix Divina']
+};
+const stageOf = m => m.level >= EVO_LV[1] ? 2 : m.level >= EVO_LV[0] ? 1 : 0;
+const formName = (k, st) => st ? EVO_NAMES[k][st - 1] : SPECIES[k].name;
+// espécie "efetiva" da forma atual: quem andava de quatro levanta, pernas crescem e a cabeça encolhe
+const FORMS = {};
+function formOf(m){
+  const st = stageOf(m), key = m.species + st;
+  if (FORMS[key]) return FORMS[key];
+  const sp = SPECIES[m.species];
+  if (!st) return FORMS[key] = sp;
+  const quad = sp.plan === 'quad', k = st === 1;
+  return FORMS[key] = {...sp, stage:st, fromQuad:quad, plan:'biped', name:formName(m.species, st),
+    size:sp.size*(k ? 1.08 : 1.16), tall:k ? 1.1 : 1.2, slim:k ? 0.94 : 0.9, arm:(sp.arm || 0.95)*(k ? 1.05 : 1.12),
+    leg:Math.max(k ? 0.9 : 1.05, sp.leg*(k ? 1.15 : 1.3)), head:sp.head*(k ? 0.88 : 0.8)*(quad ? 0.92 : 1)};
+}
 function stats(m){
-  const sp = SPECIES[m.species], L = m.level - 1;
-  const [s, a, i] = sp.base.map((b, k) => b + sp.grow[k]*L);
+  const sp = SPECIES[m.species], L = m.level - 1, ek = [1, 1.12, 1.25][stageOf(m)];
+  const [s, a, i] = sp.base.map((b, k) => (b + sp.grow[k]*L)*ek);
   return {
     str:s, agi:a, int:i,
     maxHp: Math.round(40 + s*7), power: 0.55 + s*0.035, defense: 0.75 + s*0.02,
@@ -223,7 +257,7 @@ function stats(m){
   };
 }
 const xpNext = m => 30 + m.level*20;
-function newMember(species, level){ const m = {species, level, xp:0, nick:SPECIES[species].name}; m.maxHp = stats(m).maxHp; m.hp = m.maxHp; return m; }
+function newMember(species, level){ const m = {species, level, xp:0, nick:formName(species, stageOf({level}))}; m.maxHp = stats(m).maxHp; m.hp = m.maxHp; return m; }
 
 // Itens: cura (usados na mochila) e captura (frutos e sementes que prendem o animal dentro da casca)
 const ITEMS = {
@@ -252,6 +286,12 @@ function load(){
       s.box = Array.isArray(s.box) ? s.box.filter(m => m && SPECIES[m.species]) : [];
       // saves antigos aceitavam 6 no time: quem sobra vai pra caixa
       if (s.team.length > TEAM_MAX) s.box.unshift(...s.team.splice(TEAM_MAX));
+      // saves de antes das evoluções: quem já tem nível de evoluir ganha o nome e os PV da forma nova
+      for (const m of [...s.team, ...s.box]){
+        if ([0, 1, 2].some(k => m.nick === formName(m.species, k))) m.nick = formName(m.species, stageOf(m));
+        const mh = stats(m).maxHp;
+        if (m.maxHp !== mh){ m.hp = m.hp > 0 ? Math.max(1, Math.round(m.hp*mh/m.maxHp)) : 0; m.maxHp = mh; }
+      }
       game = s; return true;
     }
   }catch(e){}
@@ -2031,7 +2071,7 @@ function makeCreatureMeshes(c){
   let list;
   if (c.plan === 'biped'){
     const arms = [0, 1].map(() => {
-      if (sp.bird){ const g = new T.Group(); add(g, GS, dark, [0, -d.al*0.1, -d.ar*0.5], [d.ar*0.7, d.al*1.15, d.ar*3.2], null, true); return g; }
+      if (sp.bird && !sp.stage){ const g = new T.Group(); add(g, GS, dark, [0, -d.al*0.1, -d.ar*0.5], [d.ar*0.7, d.al*1.15, d.ar*3.2], null, true); return g; }
       const fist = mesh(GS, sp.feat === 'gorilla' ? dark : body); fist.scale.setScalar(d.ar*1.45);
       return limb(d.ar, d.al, fist, body);
     });
@@ -2041,6 +2081,7 @@ function makeCreatureMeshes(c){
       foot.scale.set(d.lr*1.3, d.lr*0.75, d.lr*1.8*big);
       const g = limb(d.lr, d.ll, foot, sp.bird ? toon(sp.bird) : body); foot.position.z = d.lr*0.5*big; return g;
     });
+    if (sp.stage) addGear(c, torso, head, arms, legs);
     list = [legs[0], legs[1], torso, arms[0], arms[1], head];
   } else {
     const legs = [0, 1, 2, 3].map(() => { const paw = mesh(GS, dark); paw.scale.set(d.lr*1.25, d.lr*0.7, d.lr*1.5); const g = limb(d.lr, d.ll, paw, body); paw.position.z = d.lr*0.3; return g; });
@@ -2050,10 +2091,70 @@ function makeCreatureMeshes(c){
   c.meshes = list; c.eyes = ey.eyes; c.xeyes = ey.xs; c.pupils = ey.pupils; c.tail = tail; c.mouth = mouth; c.tongue = tongue; c.blepT = 0;
 }
 
+// Roupa das formas evoluídas. Guerreiro: shorts, cinto e munhequeira, mais um detalhe da classe.
+// Mestre: Força veste armadura e elmo de chifres, Agilidade lenço comprido e espada nas costas, Inteligência capa, chapéu e cajado.
+const GEAR = {
+  forca:{cloth:'#b8402b', pants:'#4a3426', metal:'#7d889c'},
+  agilidade:{cloth:'#2f9a5a', pants:'#22303a', metal:'#8a95a6'},
+  inteligencia:{cloth:'#3b56b8', pants:'#2c2a4a', metal:'#6a3fa0'}
+};
+function addGear(c, torso, head, arms, legs){
+  const sp = c.sp, st = sp.stage, d = c.d, r = d.hr, s = c.s, G = GEAR[sp.attr];
+  const cloth = toon(G.cloth), pants = toon(G.pants), metal = toon(G.metal), gold = toon('#f2c230'), belt = toon('#3a2618');
+  // shorts, cinto com fivela e munhequeiras
+  for (const g of legs) add(g, GY, pants, [0, d.ll*0.45, 0], [d.lr*1.3, d.ll*1.1, d.lr*1.3], null, true);
+  add(torso, GY, pants, [0, -d.th*0.82, 0], [d.tw*0.98, d.th*0.4, d.td*1.05]);
+  add(torso, GY, belt, [0, -d.th*0.55, 0], [d.tw*1.1, d.th*0.18, d.td*1.2]);
+  add(torso, GB, gold, [0, -d.th*0.55, d.td*1.2], [d.tw*0.36, d.th*0.24, 0.035*s]);
+  for (const a of arms) add(a, GY, st > 1 && sp.attr === 'forca' ? metal : cloth, [0, -d.al*0.5, 0], [d.ar*1.28, d.al*0.42, d.ar*1.28]);
+  // aves evoluídas trocam a asa por braço, mas as asas continuam nas costas
+  if (sp.bird) for (const sx of [-1, 1]) add(torso, GS, toon(sp.dark), [sx*d.tw*0.85, d.th*0.35, -d.td*1.15], [d.tw*0.28, d.th*1.25, d.td*0.22], [0.35, 0, sx*0.55], true);
+  const band = (mat, y) => add(head, GY, mat, [0, y*r, 0], [Math.sqrt(1 - y*y)*1.04*r, 0.17*r, Math.sqrt(1 - y*y)*1.04*r]);
+  if (sp.attr === 'forca'){
+    // ombreiras (com espinho no Mestre)
+    for (const sx of [-1, 1]){
+      add(torso, GS, metal, [sx*d.tw*1.05, d.th*0.85, 0], [d.tw*0.42, d.th*0.24, d.td*1.0], [0, 0, -sx*0.35], true);
+      if (st > 1) add(torso, GC, gold, [sx*d.tw*1.22, d.th*1.08, 0], [d.tw*0.12, d.th*0.4, d.tw*0.12], [0, 0, -sx*0.6]);
+    }
+    if (st > 1){
+      add(torso, GS, metal, [0, d.th*0.25, d.td*0.8], [d.tw*0.95, d.th*0.62, d.td*0.62], null, true);
+      add(torso, GS, gold, [0, d.th*0.3, d.td*1.4], [d.tw*0.22, d.tw*0.22, 0.03*s]);
+      band(metal, 0.42);
+      for (const sx of [-1, 1]) add(head, GC, gold, [sx*0.82*r, 0.62*r, 0.1*r], [0.12*r, 0.55*r, 0.12*r], [0, 0, -sx*0.75], true);
+    }
+  } else if (sp.attr === 'agilidade'){
+    // faixa na testa com pontas soltas e lenço no pescoço
+    band(cloth, 0.38);
+    for (const sx of [-1, 1]) add(head, GB, cloth, [sx*0.12*r, 0.2*r, -1.0*r], [0.14*r, 0.55*r, 0.03*r], [0.5, 0, sx*0.4]);
+    add(torso, GY, cloth, [0, d.th*0.98, 0], [d.tw*0.72, d.th*0.22, d.td*0.95]);
+    const tails = st > 1 ? [-1, 1] : [1];
+    for (const sx of tails) add(torso, GB, cloth, [sx*d.tw*0.3, d.th*0.1, -d.td*1.12], [d.tw*0.32, d.th*(st > 1 ? 1.9 : 1.2), 0.03*s], [0.2, 0, sx*0.12]);
+    if (st > 1){
+      // espada atravessada nas costas
+      add(torso, GB, toon('#1f1d22'), [0, d.th*0.4, -d.td*1.3], [0.05*s, d.th*2.6, 0.035*s], [0, 0, 0.75], true);
+      add(torso, GB, gold, [-d.tw*0.42, d.th*0.88, -d.td*1.3], [0.14*s, 0.035*s, 0.05*s], [0, 0, 0.75]);
+      for (const g of legs) add(g, GY, metal, [0, -d.ll*0.35, 0], [d.lr*1.25, d.ll*0.45, d.lr*1.25]);
+    }
+  } else {
+    // capa e gola; o Mestre ganha chapéu de mago e cajado
+    add(torso, GB, cloth, [0, -d.th*0.35, -d.td*1.18], [d.tw*2.1, d.th*(st > 1 ? 2.9 : 2.2), 0.035*s], [0.14, 0, 0], true);
+    add(torso, GY, gold, [0, d.th*0.95, -d.td*0.2], [d.tw*0.85, d.th*0.2, d.td*1.0]);
+    if (st > 1){
+      const hat = new T.Group(); hat.position.set(0, 0.72*r, -0.05*r); hat.rotation.set(-0.15, 0, 0.12); head.add(hat);
+      add(hat, GY, metal, [0, 0, 0], [1.05*r, 0.06*r, 1.05*r], null, true);
+      add(hat, GC, metal, [0, 0.7*r, 0], [0.62*r, 1.4*r, 0.62*r], [0, 0, 0.1], true);
+      add(hat, GY, gold, [0, 0.1*r, 0], [0.63*r, 0.12*r, 0.63*r]);
+      const staff = arms[1];
+      add(staff, GY, toon('#6b4426'), [0, -d.al, d.al*0.35], [0.03*s, d.al*3.2, 0.03*s], [Math.PI/2, 0, 0], true);
+      add(staff, GS, emberMat, [0, -d.al, d.al*2.0], [0.09*s, 0.09*s, 0.09*s], null, true);
+    } else band(cloth, 0.45);
+  }
+}
+
 /* ================= Animais (ragdoll ativo) ================= */
 let creatures = [];
 function makeCreature(member, x, z, role){
-  const sp = SPECIES[member.species];
+  const sp = formOf(member);
   const st = stats(member);
   const s = sp.size*(1 + 0.012*(member.level - 1));
   const slot = creatureSeq++;   // só serve pra defasar animações entre animais
@@ -2065,7 +2166,8 @@ function makeCreature(member, x, z, role){
   const P = (a, pa, b, pb) => new C.PointToPointConstraint(a, new C.Vec3(...pa), b, new C.Vec3(...pb), 1e4);
   let d, H, parts, joints, torso, head, arms = [], legs, kinds, grabbers, strikers, reach;
   if (sp.plan === 'biped'){
-    d = {tw:0.32*s, th:0.36*s, td:0.24*s, hr:0.32*s*sp.head, al:0.28*s*sp.arm, ar:0.085*s, ll:0.25*s*sp.leg, lr:0.11*s};
+    // tl só serve pros enfeites de quem era quadrúpede e levantou (rabo, espinhos, casca)
+    d = {tw:0.32*s*(sp.slim || 1), th:0.36*s*(sp.tall || 1), td:0.24*s*(sp.slim || 1), tl:0.27*s, hr:0.32*s*sp.head, al:0.28*s*sp.arm, ar:0.085*s, ll:0.25*s*sp.leg, lr:0.11*s};
     H = 2*d.ll + d.th;
     const y = H + 0.05;
     torso = mk(new C.Box(new C.Vec3(d.tw, d.th, d.td)), 3, x, y, z);
@@ -2573,9 +2675,11 @@ function toast(text){
 const portraits = {};
 const prt = new T.WebGLRenderTarget(256, 256);
 const prCam = new T.PerspectiveCamera(28, 1, 0.1, 50);
-function portrait(species){
-  if (portraits[species]) return portraits[species];
-  const c = makeCreature(newMember(species, 5), 1000, 1000, 'preview');
+// recebe o membro (a forma depende do nível) ou só a espécie
+function portrait(m){
+  const species = m.species || m, st = m.species ? stageOf(m) : 0, key = species + st;
+  if (portraits[key]) return portraits[key];
+  const c = makeCreature(newMember(species, st ? EVO_LV[st - 1] : 5), 1000, 1000, 'preview');
   syncCreature(c);
   const sz = c.plan === 'quad' ? Math.max(c.H + c.d.hr*2, c.d.tl*2.6) : c.H + c.d.th + c.d.hr*2.2;
   const cx = 1000, cy = c.plan === 'quad' ? c.H*0.8 : sz*0.48, cz = c.plan === 'quad' ? 1000 + c.d.tl*0.45 : 1000;
@@ -2591,7 +2695,7 @@ function portrait(species){
   for (let y = 0; y < 256; y++) img.data.set(buf.subarray((255 - y)*1024, (256 - y)*1024), y*1024);
   g.putImageData(img, 0, 0);
   destroyCreature(c);
-  return portraits[species] = cv.toDataURL();
+  return portraits[key] = cv.toDataURL();
 }
 
 /* ================= Itens em 3D ================= */
@@ -2811,11 +2915,89 @@ function startBattle(w){
 }
 function endBattle(result){ if (!battle || battle.over) return; battle.over = true; battle.result = result; battle.endT = result === 'flee' ? 0.3 : 1.8; }
 function levelUp(m, log){
+  const st0 = stageOf(m);
   while (m.xp >= xpNext(m)){
     m.xp -= xpNext(m);
     const a = stats(m); m.level++; const b = stats(m);
     m.maxHp = b.maxHp; m.hp += b.maxHp - a.maxHp;
     log.push(`${m.nick} subiu pro nível ${m.level}! FOR +${(b.str - a.str).toFixed(1)} · AGI +${(b.agi - a.agi).toFixed(1)} · INT +${(b.int - a.int).toFixed(1)}`);
+  }
+  if (stageOf(m) > st0) evoQueue.push({m, st0});
+}
+
+/* Evolução: o animal que está com você sobe num casulo de luz e sai na forma nova; quem está na reserva só avisa */
+let evoQueue = [], evo = null;
+const EVO_SWAP = 2.0, EVO_END = 3.6;
+function runEvolutions(){
+  while (evoQueue.length){
+    const e = evoQueue.shift(), old = formName(e.m.species, e.st0), nu = formName(e.m.species, stageOf(e.m));
+    const before = e.m.nick;
+    if (e.m.nick === old) e.m.nick = nu;
+    if (!evo && mode === 'world' && follower && follower.member === e.m && !follower.removed){ startEvo(follower, before, nu); continue; }
+    setTimeout(() => toast(`${before} evoluiu para ${nu}!`), 1500);
+  }
+}
+function startEvo(c, before, nu){
+  mode = 'evo'; setPrompt('');
+  const p = c.torso.position, col = ATTR[c.sp.attr].color;
+  const fx = new T.Group(); fx.position.set(p.x, 0, p.z); scene.add(fx);
+  const glow = (color, o) => new T.MeshBasicMaterial({color, transparent:true, opacity:o, depthWrite:false, blending:T.AdditiveBlending});
+  const pillar = new T.Mesh(new T.CylinderGeometry(1, 1, 14, 24, 1, true), glow(col, 0)); pillar.position.y = 7; fx.add(pillar);
+  const cocoon = new T.Mesh(GS, new T.MeshBasicMaterial({color:'#ffffff', transparent:true, opacity:0, depthWrite:false})); fx.add(cocoon);
+  const halo = new T.Mesh(GS, glow(col, 0)); fx.add(halo);
+  const loops = [0, 1, 2].map(i => { const m = new T.Mesh(new T.TorusGeometry(1, 0.05, 6, 32), glow(i === 1 ? '#ffffff' : col, 0.9)); m.rotation.x = Math.PI/2; fx.add(m); return m; });
+  evo = {c, before, nu, t:0, fx, pillar, cocoon, halo, loops, size:c.H + c.d.hr*2, swapped:false};
+  c.input = {}; trainer.yaw = Math.atan2(p.x - trainer.pos.x, p.z - trainer.pos.z);
+  showEvoText(`${before} está evoluindo...`, '');
+}
+function showEvoText(a, b){
+  const el = $('evo'); el.querySelector('b').textContent = a; el.querySelector('span').textContent = b;
+  el.classList.toggle('show', !!(a || b));
+}
+function stepEvo(dt){
+  const e = evo; e.t += dt; trainer.moving = false;
+  const t = e.t, c = e.c, up = Math.min(1, t/1.4)*1.4;
+  // segura o animal flutuando no meio da luz
+  if (!c.removed){
+    const tp = c.torso.position;
+    for (const p of c.parts){ p.velocity.x *= 0.85; p.velocity.z *= 0.85; }
+    c.torso.velocity.y = (c.H + up - tp.y)*6; c.torso.angularVelocity.y = t < EVO_SWAP ? 3 + t*4 : 2;
+    e.fx.position.x += (tp.x - e.fx.position.x)*0.2; e.fx.position.z += (tp.z - e.fx.position.z)*0.2;
+  }
+  const y = c.H*0.6 + up, k = t < EVO_SWAP ? Math.min(1, t/EVO_SWAP) : Math.max(0, 1 - (t - EVO_SWAP)/0.9);
+  const R = Math.max(e.size, 1.2)*0.75;
+  e.pillar.scale.set(R*(0.6 + k*0.6), 1, R*(0.6 + k*0.6)); e.pillar.material.opacity = (t < EVO_SWAP ? k : Math.max(0, 1 - (t - EVO_SWAP)/1.4))*0.45;
+  e.cocoon.position.y = e.halo.position.y = y;
+  e.cocoon.scale.setScalar(R*(0.3 + k*0.85)); e.cocoon.material.opacity = Math.pow(k, 1.5)*0.95;
+  e.halo.scale.setScalar(R*(0.5 + k*1.1) + Math.sin(t*20)*0.05); e.halo.material.opacity = k*0.5;
+  e.loops.forEach((m, i) => {
+    const a = t*(3 + i) + i*2.1;
+    m.position.y = y + Math.sin(a)*R*0.9; m.scale.setScalar(R*(1.1 + 0.25*i)*(0.4 + k*0.8));
+    m.rotation.set(Math.PI/2 + Math.sin(a*0.7)*0.4, 0, a*0.5); m.material.opacity = k*0.9;
+  });
+  if (t < EVO_SWAP && Math.random() < 0.5) burst({x:e.fx.position.x + rand(-R, R), y:rand(0.1, 0.5), z:e.fx.position.z + rand(-R, R)}, 1, ['#ffffff', ATTR[c.sp.attr].color, '#f2c230'], 4);
+  shake(t < EVO_SWAP ? 0.04 + k*0.08 : 0);
+  if (!e.swapped && t >= EVO_SWAP){
+    // flash: o corpo velho some dentro da luz e nasce o novo, no mesmo lugar
+    e.swapped = true;
+    const x = c.torso.position.x, z = c.torso.position.z, yaw = c.yaw;
+    destroyCreature(c);
+    const n = makeCreature(c.member, x, z, 'follower');
+    n.yaw = yaw; for (const p of n.parts) p.position.y += up;
+    follower = n; e.c = n;
+    const fl = $('flash'); fl.style.transition = 'none'; fl.style.opacity = 1;
+    requestAnimationFrame(() => { fl.style.transition = ''; fl.style.opacity = 0; });
+    burst({x, y:y, z}, 60, ['#ffffff', ATTR[n.sp.attr].color, '#f2c230'], 7);
+    shockwave(x, z, '#ffffff', 5); shockwave(x, z, ATTR[n.sp.attr].color, 3.5); shake(0.5);
+    showEvoText(`${e.before} evoluiu para`, `${e.nu}!`);
+    trainer.cheerT = 2.5; teamKey = ''; renderTeam();
+  }
+  if (t >= EVO_END){
+    scene.remove(e.fx); e.fx.traverse(o => { if (o.material) o.material.dispose(); if (o.geometry && o.geometry !== GS) o.geometry.dispose(); });
+    evo = null; mode = 'world';
+    setTimeout(() => { if (!evo) showEvoText('', ''); }, 1000);
+    toast(`${e.before} virou ${EVO_TIER[stageOf(e.c.member)]}: ${e.nu}! FOR, AGI e INT subiram.`);
+    save(); setHud(); runEvolutions();
   }
 }
 function finishBattle(){
@@ -2855,6 +3037,7 @@ function finishBattle(){
   else { mon.role = 'follower'; follower = mon; mon.input = {}; mon.confused = 0; }
   log.forEach((l, i) => setTimeout(() => toast(l), i*400));
   save(); setHud();
+  runEvolutions();
 }
 function blackout(){
   $('fade').style.opacity = 1;
@@ -3256,7 +3439,7 @@ function fighterCard(el, m, owner){
   const key = m.species + m.level + owner;
   if (el.dataset.key !== key){
     el.dataset.key = key;
-    el.innerHTML = `<div class="row"><span class="n"><img src="${portrait(m.species)}" alt=""><span class="nm"></span></span><span class="l">Nv. ${m.level}</span></div><div class="bar"><i></i></div><div class="meta"><span>${chip(sp.attr)} <span class="ow"></span></span><span class="hpv"></span></div>`;
+    el.innerHTML = `<div class="row"><span class="n"><img src="${portrait(m)}" alt=""><span class="nm"></span></span><span class="l">Nv. ${m.level}</span></div><div class="bar"><i></i></div><div class="meta"><span>${chip(sp.attr)} <span class="ow"></span></span><span class="hpv"></span></div>`;
     el.querySelector('.nm').textContent = m.nick; el.querySelector('.ow').textContent = owner;
   }
   const bar = el.querySelector('.bar>i'); bar.style.width = r*100 + '%'; bar.style.background = hpColor(r);
@@ -3348,6 +3531,8 @@ function step(dt){
         if (Math.hypot(w.torso.position.x - trainer.pos.x, w.torso.position.z - trainer.pos.z) < 3.4){ startBattle(w); break; }
       }
     }
+  } else if (mode === 'evo' && evo){
+    stepEvo(dt);
   } else if (mode === 'battle' && battle && battle.pvp){
     trainer.moving = false; setPrompt('');
     if (battle.host) pvpHostStep(dt); else pvpGuestStep(dt);
@@ -3470,7 +3655,7 @@ function renderTeam(){
   if (key === teamKey) return; teamKey = key;
   $('team').innerHTML = game.team.map((m, i) => {
     const r = m.hp/m.maxHp, sp = SPECIES[m.species];
-    return `<div class="tm card-ui ${m === lead ? 'lead' : ''} ${m.hp <= 0 ? 'out' : ''}"><img src="${portrait(m.species)}" alt="${sp.name}"><span class="n">${i + 1}. ${m.nick}</span><span class="l">${chip(sp.attr)} Nv. ${m.level}</span><div class="bar"><i style="width:${r*100}%;background:${hpColor(r)}"></i></div></div>`;
+    return `<div class="tm card-ui ${m === lead ? 'lead' : ''} ${m.hp <= 0 ? 'out' : ''}"><img src="${portrait(m)}" alt="${sp.name}"><span class="n">${i + 1}. ${m.nick}</span><span class="l">${chip(sp.attr)} Nv. ${m.level}</span><div class="bar"><i style="width:${r*100}%;background:${hpColor(r)}"></i></div></div>`;
   }).join('');
 }
 let wildKey = '';
@@ -3483,7 +3668,7 @@ function updateBattleHud(){
     const a = BEATS[mine.attr] === sp.attr ? `<span style="color:var(--agi)">Vantagem sua: ${ATTR[mine.attr].name} vence ${ATTR[sp.attr].name}</span>`
       : BEATS[sp.attr] === mine.attr ? `<span style="color:var(--str)">Desvantagem: ${ATTR[sp.attr].name} vence ${ATTR[mine.attr].name}</span>`
       : `<span>Atributos iguais</span>`;
-    $('wild').innerHTML = `<div class="row"><span class="n"><img src="${portrait(m.species)}" alt="">${m.nick}</span><span class="l">Nv. ${m.level}</span></div><div class="bar"><i></i></div><div class="meta"><span>${chip(sp.attr)} ${ATTR[sp.attr].name}</span><span id="whp"></span></div><div id="matchup">${a}</div>`;
+    $('wild').innerHTML = `<div class="row"><span class="n"><img src="${portrait(m)}" alt="">${m.nick}</span><span class="l">Nv. ${m.level}</span></div><div class="bar"><i></i></div><div class="meta"><span>${chip(sp.attr)} ${ATTR[sp.attr].name}</span><span id="whp"></span></div><div id="matchup">${a}</div>`;
     wildKey = key;
   }
   const r = m.hp/m.maxHp, bar = $('wild').querySelector('.bar>i');
@@ -3527,11 +3712,13 @@ function attrBars(m){
   return `<div class="attrs">${row('FOR', s.str, 'var(--str)')}${row('AGI', s.agi, 'var(--agi)')}${row('INT', s.int, 'var(--int)')}</div>`;
 }
 function monCard(m, opts={}){
-  const sp = SPECIES[m.species], s = stats(m);
+  const sp = formOf(m), s = stats(m), st = stageOf(m);
+  const evo = st < 2 ? `Evolui no Nv. ${EVO_LV[st]}: ${formName(m.species, st + 1)}` : 'Forma final';
   return `<div class="mon ${opts.lead ? 'lead' : ''}">
-    <img src="${portrait(m.species)}" alt="${sp.name}">
+    <img src="${portrait(m)}" alt="${sp.name}">
     <div class="t">${m.nick}${chip(sp.attr)}</div>
     ${opts.starter ? `<p>${sp.desc}</p>` : `<div class="small">Nv. ${m.level} · XP ${m.xp}/${xpNext(m)} · PV ${Math.ceil(m.hp)}/${m.maxHp}</div>`}
+    <div class="small">${EVO_TIER[st]}${m.nick !== sp.name ? ` (${sp.name})` : ''} · ${evo}</div>
     ${attrBars(m)}
     <div class="small">Especial: ${sp.specialName} · ${sp.plan === 'quad' ? 'ataca mordendo' : 'ataca socando'}</div>
     <div class="small">Velocidade ${s.speed.toFixed(2)} · Esquiva ${Math.round(s.dodge*100)}% · Recarga do especial ${s.specCd.toFixed(1)}s</div>
@@ -3551,6 +3738,7 @@ function showTitle(){
       <div><kbd>E</kbd> segurar: agarrar ou morder e segurar</div><div><kbd>Espaço</kbd> pular, ou levantar quem você pegou</div>
       <div><kbd>F</kbd> golpe especial do animal</div><div><kbd>R</kbd> ou botão direito: arremessar bolota na mira</div>
       <div><kbd>Z</kbd> mochila · <kbd>C</kbd> troca captura · <kbd>X</kbd> fugir</div><div><kbd>E</kbd> no tapete: loja, Centro de Cura, Caixa de Animais e portais pros 5 mapas</div>
+      <div style="grid-column:1/-1">Evolução: no Nv. ${EVO_LV[0]} o animal vira Guerreiro e fica de pé; no Nv. ${EVO_LV[1]} vira Mestre, quase gente.</div>
     </div>`;
   $('card').querySelectorAll('[data-starter]').forEach(b => b.onclick = () => {
     game = {team:[newMember(b.dataset.starter, 5)], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota'};
@@ -3593,7 +3781,7 @@ $('teamBtn').onclick = showTeam;
 /* Caixa de Animais: guarda quem não cabe no time. Quem entra na caixa descansa e sai curado. */
 function boxRow(m, btn){
   const sp = SPECIES[m.species];
-  return `<div class="boxrow"><img src="${portrait(m.species)}" alt="${sp.name}">
+  return `<div class="boxrow"><img src="${portrait(m)}" alt="${sp.name}">
     <div class="nm">${m.nick}${chip(sp.attr)}<div class="small">Nv. ${m.level} · PV ${Math.ceil(m.hp)}/${m.maxHp}</div></div>${btn}</div>`;
 }
 function depositMember(i){
@@ -3664,7 +3852,7 @@ function showBag(){
     const it = ITEMS[bagPick];
     targets = `<div class="sect">Usar ${it.name} em quem?</div><div class="targets">${game.team.map((m, i) => {
       const ok = it.revive ? m.hp <= 0 : m.hp > 0 && m.hp < m.maxHp;
-      return `<button data-use="${i}" ${ok ? '' : 'disabled'}><img src="${portrait(m.species)}" alt="">${m.nick} ${Math.ceil(m.hp)}/${m.maxHp}</button>`;
+      return `<button data-use="${i}" ${ok ? '' : 'disabled'}><img src="${portrait(m)}" alt="">${m.nick} ${Math.ceil(m.hp)}/${m.maxHp}</button>`;
     }).join('')}</div>`;
   }
   const html = `<div class="shophead"><h2 style="margin:0">Mochila</h2><span class="coins">${game.money} moedas</span></div>

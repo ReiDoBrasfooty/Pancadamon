@@ -59,6 +59,37 @@ No celular aparecem botões na tela.
   - Macaco: Pedrada
   - Coruja: Pio Hipnótico
   - Raposa: Truque da Raposa
+- **Evolução no estilo Digimon:** a cada evolução o animal fica mais parecido com gente.
+  - **Nível 15, Guerreiro:** quem andava de quatro fica de pé e passa a socar. Ganha shorts, cinto e munhequeiras, e o corpo fica mais alto.
+  - **Nível 25, Mestre:** fica ainda mais alto, com cabeça menor e equipamento da classe. Força usa armadura e elmo de chifres, Agilidade usa lenço comprido e espada nas costas, e Inteligência usa capa, chapéu de mago e cajado.
+  - Cada evolução aumenta FOR, AGI e INT (+12% no Guerreiro e +25% no Mestre). Se o animal está com você, ele sobe num casulo de luz e sai na forma nova.
+
+  | Animal | Guerreiro | Mestre |
+  |---|---|---|
+  | Urso | Ursoldado | Generurso |
+  | Gorila | Gorilutador | Gorimperador |
+  | Rinoceronte | Rinocavaleiro | Rinotitã |
+  | Javali | Javaliente | Javalorde |
+  | Lobo | Lobisomem | Lobonin |
+  | Guepardo | Guepardleta | Relampardo |
+  | Canguru | Canguboxe | Cangurulenda |
+  | Macaco | Macacientista | Macacomago |
+  | Coruja | Corujuíza | Arquicoruja |
+  | Raposa | Raposábia | Nove-Caudas |
+  | Tatu | Tatuerreiro | Tatublindado |
+  | Calango | Calangaceiro | Calampião |
+  | Carcará | Carcavaqueiro | Carcarapajé |
+  | Iaque | Iaquerreiro | Iaquelosso |
+  | Lebre-da-Neve | Lebreninja | Lebrelâmina |
+  | Pinguim | Pinguinventor | Pinguimperador |
+  | Jacaré | Jacaraté | Jacarei |
+  | Sapo-Boi | Sapoeira | Mestre Sapão |
+  | Capivara | Capimonge | Capiguru |
+  | Búfalo de Lava | Bufaferreiro | Vulcabúfalo |
+  | Salamandra | Salamaninja | Salamandragão |
+  | Fênix | Fênix Maga | Fênix Divina |
+
+  Animais selvagens de nível alto (Pico Congelado em diante) já aparecem evoluídos.
 - **Captura com frutos e sementes:** Bolota, Pinha (1,5x), Coco (2,2x) e Semente Dourada (garantida).
 - **Loja do Mato e mochila:** itens de cura (Fruta Silvestre, Pote de Mel, Cesta de Frutas, Erva Reanimadora) e de captura, comprados com moedas ganhas nas batalhas.
 - **Time de até 5 animais e Caixa de Animais:** capturas com o time cheio vão pra caixa, um terminal ao lado do Centro de Cura onde você guarda e pega animais. Quem é guardado descansa e volta curado.

@@ -48,6 +48,10 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
 **Data:**
 - `ATTR` and `BEATS` define the class triangle: Força > Agilidade > Inteligência > Força, applied via `adv()` (×1.3 / ×0.8).
 - `SPECIES` has 22 animals: the 10 of Campos Pancada plus 3 per new map (marked with `region`, one per class). Patches in the new maps spawn mostly their region's animals. Optional fields: `bird` (beak/feet color; birds get wings and no mouth), `rock` (color of what `throw` launches). Each has `plan` (`biped` | `quad`), `feat` (the visual builder key), `base`/`grow` for [FOR, AGI, INT], and `special`.
+- **Evolutions** depend only on level (`stageOf(m)`: 0, 1 at `EVO_LV[0]`, 2 at `EVO_LV[1]`), so saves, wilds, remote pets and duels need no extra field.
+  - `formOf(member)` returns the effective species for that stage (cached in `FORMS`): every evolved form is `plan: 'biped'` (quadrupeds stand up), with `stage`, `fromQuad`, bigger `size`/`leg`/`tall`, smaller `head`. `makeCreature` always uses `formOf`, never `SPECIES` directly.
+  - `EVO_NAMES` holds the two form names per species. `levelUp` queues stage changes on `evoQueue`; `runEvolutions()` (end of `finishBattle`) renames the member and, if it's the follower, plays the cutscene in `mode === 'evo'` (`stepEvo`).
+  - `addGear` dresses evolved forms by class (`GEAR`). Biped `d` has a `tl` so quadruped decorations still fit after standing up.
 - `stats(member)` derives every combat number (HP, power, speed, dodge, special cooldown, etc.) from level. Members only store `{species, level, xp, hp, maxHp, nick}`.
 - The team holds at most `TEAM_MAX` (5) members; the rest live in `game.box`, managed by `showBox()` at the terminal next to the Centro (`BOX_SPOT`).
 - `ITEMS` holds cure and capture items. Capture items are a nut or seed (Bolota/Pinha/Coco/Semente), each with a `mult`.
@@ -78,7 +82,7 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
 - `syncCreature` copies body transforms to meshes. It skips this for `role === 'puppet'`, whose meshes are driven directly from network snapshots.
 
 **Game flow:**
-- `mode` is `title` | `world` | `battle` | `menu`. `menu` pauses `step()`, even mid-battle.
+- `mode` is `title` | `world` | `battle` | `menu` | `evo`. `menu` pauses `step()`, even mid-battle; `evo` freezes the trainer while the evolution cutscene runs.
 - `battle` holds the current fight:
   - wild fights end through `endBattle` → `finishBattle`;
   - XP goes to alive team members, full for the ones in `battle.fought` and half for the rest.
