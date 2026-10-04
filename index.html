@@ -932,7 +932,10 @@ function bush(x, z, s){
     const pier = mesh(GB, toon('#a8784a')); pier.scale.set(1.1, 0.12, 2.8); pier.position.set(POND.x + 1.2, 0.14, POND.z - POND.r + 0.9); outline(pier, 1.03); scene.add(pier);
     for (const [ox, oz] of [[-0.5, -1.2], [0.5, -1.2], [-0.5, 1.2], [0.5, 1.2]]){ const p = mesh(GY, toon('#7a4a26')); p.scale.set(0.07, 0.5, 0.07); p.position.set(pier.position.x + ox, 0.1, pier.position.z + oz); scene.add(p); }
     const boat = new T.Group();
-    const hull = mesh(new T.SphereGeometry(1, 14, 8, 0, TAU, Math.PI/2, Math.PI/2), toon('#c8402a')); hull.scale.set(0.55, 0.35, 1.2); outline(hull, 1.05); boat.add(hull);
+    // casco é meia esfera aberta: dos dois lados, senão de cima só aparece o contorno e a água através dele
+    const hullMat = rimify(new T.MeshToonMaterial({color:'#c8402a', gradientMap:toonGrad, side:T.DoubleSide}));
+    const hull = mesh(new T.SphereGeometry(1, 14, 8, 0, TAU, Math.PI/2, Math.PI/2), hullMat); hull.scale.set(0.55, 0.35, 1.2); outline(hull, 1.05); boat.add(hull);
+    const floor = mesh(new T.CircleGeometry(1, 20), toon('#8a5a3b'), false); floor.rotation.x = -Math.PI/2; floor.position.y = -0.12; floor.scale.set(0.5, 1.1, 1); boat.add(floor);
     const seat = mesh(GB, toon('#f3dfb0')); seat.scale.set(0.9, 0.06, 0.25); seat.position.y = -0.05; boat.add(seat);
     boat.position.set(POND.x - 1.6, 0.18, POND.z + 1.2); boat.rotation.y = 0.7; scene.add(boat); fires.push({boat});
   }
@@ -4753,7 +4756,9 @@ function drawFrame(){
   const w = Math.max(1, Math.round(innerWidth*pr*k)), h = Math.max(1, Math.round(innerHeight*pr*k));
   if (post.w !== w || post.h !== h){
     if (post.rt) post.rt.dispose();
-    post.rt = new T.WebGLRenderTarget(w, h, {minFilter:T.NearestFilter, magFilter:T.NearestFilter, depthTexture:new T.DepthTexture(w, h)});
+    // profundidade de 24 bits: com 16 o chão em camadas (caminho, manchas de grama, tapetes) briga e vira listras
+    const dt = new T.DepthTexture(w, h); dt.type = T.UnsignedIntType;
+    post.rt = new T.WebGLRenderTarget(w, h, {minFilter:T.NearestFilter, magFilter:T.NearestFilter, depthTexture:dt});
     post.w = w; post.h = h; post.frame = 0;
   }
   const u = post.mat.uniforms;
