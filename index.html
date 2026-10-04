@@ -3676,17 +3676,29 @@ function battleUpdate(dt){
    Lobby (sala principal): cada jogador publica na presença onde está, quem está levando e se está desafiando alguém.
    Duelo: quem desafiou é o "host" e roda a física da luta; o convidado manda os comandos e recebe o estado ~30x/s. */
 const r2 = v => Math.round(v*100)/100, r3 = v => Math.round(v*1000)/1000;
-const net = {room:null, user:null, remotes:new Map(), names:{}, challenge:null, accept:null, decline:null, pubT:0, duel:null, nameT:-9};
+// solo = está no claude.ai mas a sala não conectou (ex.: abriu pelo link público em vez do convite)
+const net = {room:null, user:null, remotes:new Map(), names:{}, challenge:null, accept:null, decline:null, pubT:0, duel:null, nameT:-9, solo:false, soloTold:false};
+function goSolo(){
+  net.room = null; net.solo = true;
+  for (const r of [...net.remotes.values()]) removeRemote(r);
+  if (mode !== 'title'){ setHud(); soloNote(); }
+}
+// avisa uma vez por que os amigos não aparecem
+function soloNote(){
+  if (!net.solo || net.soloTold || mode === 'title') return;
+  net.soloTold = true;
+  toast('Modo solo: pra ver seus amigos, todo mundo precisa abrir o jogo pelo convite do claude.ai, logado.');
+}
 (async function initNet(){
   try{
     if (!window.claude || !window.claude.use) return;
     const room = await window.claude.use('room');
-    if (!room) return;
+    if (!room){ goSolo(); return; }
     net.user = await window.claude.use('user');
     net.room = room;
-    room.onPeers(() => {}, () => { net.room = null; });
+    room.onPeers(() => {}, goSolo);
     if (mode !== 'title') setHud();
-  }catch(e){ net.room = null; }
+  }catch(e){ goSolo(); }
 })();
 const lobbyPeers = () => { try { return net.room ? net.room.peers() : []; } catch(e){ return []; } };
 const myPeerId = () => { const me = lobbyPeers().find(p => p.sameTab); return me ? me.peer : null; };
@@ -4355,7 +4367,8 @@ function setHud(){
   $('me').hidden = !pvp;
   $('big').hidden = !pvp;
   $('pills').hidden = mode === 'title';
-  $('online').hidden = !net.room || mode === 'title';
+  $('online').hidden = !(net.room || net.solo) || mode === 'title';
+  if (net.solo){ $('online').textContent = 'Modo solo'; $('online').title = 'A sala não conectou: abra o jogo pelo convite do claude.ai, logado, pra jogar com amigos.'; }
   $('spec').hidden = !inBattle;
   $('teamBtn').hidden = inBattle;
   $('bagBtn').hidden = pvp;
@@ -4572,7 +4585,7 @@ function enterWorld(){
     else { trainer.pos.set(0, 0, -11); trainer.yaw = Math.PI; }
   }
   applyRegion(want);
-  spawnFollower(); setHud();
+  spawnFollower(); setHud(); soloNote();
   for (const p of PATCHES){ if (p.region !== want.id) continue; let n = creatures.filter(c => c.patch === p).length; for (let i = 0; i < 6 && n < PER_PATCH; i++) if (spawnWild(p, false)) n++; }
 }
 

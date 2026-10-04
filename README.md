@@ -131,6 +131,8 @@ No celular aparecem botões na tela.
 
 O multiplayer (ver os amigos no mapa e duelar na Arena) usa o recurso de sala em tempo real dos artifacts do claude.ai (`window.claude.use("room")`). Ele funciona quando o jogo é aberto como artifact no claude.ai e compartilhado com os amigos.
 
+Cada amigo precisa ser convidado pelo e-mail no menu de compartilhamento do artifact e abrir o jogo logado no claude.ai. Quem abre só pelo link público não entra na sala: joga sozinho e fica invisível pros outros. Nesse caso o jogo mostra "Modo solo" no topo da tela.
+
 Abrindo o `index.html` direto, ou por outro site como o GitHub Pages, o jogo roda só no modo single-player.
 
 ### Testar o multiplayer localmente
