@@ -4407,8 +4407,8 @@ function showTitle(){
       <div><kbd>E</kbd> segurar: agarrar ou morder e segurar</div><div><kbd>Espaço</kbd> pular, ou levantar quem você pegou</div>
       <div><kbd>F</kbd> golpe especial do animal</div><div><kbd>R</kbd> ou botão direito: arremessar bolota na mira</div>
       <div><kbd>Z</kbd> mochila · <kbd>C</kbd> troca captura · <kbd>X</kbd> fugir</div><div><kbd>E</kbd> no tapete: loja, Centro de Cura, Caixa de Animais e portais pros 5 mapas</div>
-      <div style="grid-column:1/-1">Chefes: cada mapa tem um chefe de coroa no covil. Vença ou capture ele pra ganhar a chave do próximo mapa.</div>
-      <div style="grid-column:1/-1">Evolução: no Nv. ${EVO_LV[0]} o animal vira Guerreiro e fica de pé; no Nv. ${EVO_LV[1]} vira Mestre, quase gente.</div>
+      <div style="grid-column:1/-1">Chefes: cada mapa tem uma criatura mitológica no covil (Unicórnio, Esfinge, Grifo, Hidra e Dragão). Vença ou capture pra ganhar a chave do próximo mapa.</div>
+      <div style="grid-column:1/-1">Evolução: no Nv. ${EVO_LV[0]} o animal vira Guerreiro e fica de pé; no Nv. ${EVO_LV[1]} vira Mestre, quase gente, cada um com o seu figurino.</div>
     </div>`;
   $('card').querySelectorAll('[data-starter]').forEach(b => b.onclick = () => {
     game = {team:[newMember(b.dataset.starter, 5)], box:[], money:300, inv:{bolota:5, fruta:3}, sel:'bolota', keys:[], bosses:{}};
