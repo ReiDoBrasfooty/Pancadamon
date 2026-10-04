@@ -116,6 +116,12 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
   - The guest publishes `inp`, with press counters so a dropped message can't lose a button press.
   - The guest renders the fight with puppets.
 - `window.claude.use('room')` resolves `null` outside claude.ai. Every net path must degrade to single-player.
+- **Online outside claude.ai (`pnet`, GitHub Pages):** when `IN_CLAUDE` is false, the **Online** menu (`showOnline`) lets one player host and others join with a 5-character code (`?sala=CODE` opens it prefilled).
+  - It lazy-loads PeerJS from cdnjs. The host relays every message, and `peerView(room).api` imitates the `room` capability (`presence`, `peers`, `onPeers`, `join`, `leave`). `goOnline` sets `net.room`/`net.user` to these shims, so the lobby and duel code above runs unchanged.
+  - Peer ids are `h` (host) and `p1`, `p2`… The host keeps the authoritative `pnet.rooms`. Each tab mirrors the rooms it is in through `pnet.views`, updated by `up`/`gone` messages.
+  - Saves are keyed by character name: the host stores everyone's in `localStorage` under `pancadamon_online_saves`, and each browser keeps a per-name copy under `pancadamon_char_<name>`. `pickSave` takes the newer copy using `game.at`, which `save()` stamps.
+  - Every save from another machine goes through `fixSave`/`cleanMember`, which validate species and numbers and strip HTML from nicknames. `load()` uses the same path. Check species with `isSpecies`, never `SPECIES[x]`, because remote strings like `constructor` hit `Object.prototype`.
+  - Test it locally with two tabs on `http://localhost:8765/` (not `/mp`, which sets `window.claude`). It needs internet for the PeerJS server.
 
 ## Conventions
 

@@ -29,6 +29,7 @@ Todos os comandos ficam em volta do WASD, na mão esquerda.
 | `1`–`5` | Trocar de animal |
 | `E` (no mapa) | Usar o Centro de Cura, a Caixa de Animais, a Loja ou um portal (no tapete) |
 | `F` / `E` / `X` (no mapa) | Desafiar um amigo / aceitar / recusar |
+| Botão **Online** | Criar um mundo ou entrar no de um amigo (fora do claude.ai) |
 
 No celular aparecem botões na tela.
 
@@ -129,11 +130,32 @@ No celular aparecem botões na tela.
 
 ## Multiplayer
 
-O multiplayer (ver os amigos no mapa e duelar na Arena) usa o recurso de sala em tempo real dos artifacts do claude.ai (`window.claude.use("room")`). Ele funciona quando o jogo é aberto como artifact no claude.ai e compartilhado com os amigos.
+No multiplayer você vê os amigos no mapa e pode duelar com eles na Arena. Ele funciona de dois jeitos.
+
+### No claude.ai
+
+Usa o recurso de sala em tempo real dos artifacts do claude.ai (`window.claude.use("room")`).
 
 Cada amigo precisa ser convidado pelo e-mail no menu de compartilhamento do artifact e abrir o jogo logado no claude.ai. Quem abre só pelo link público não entra na sala: joga sozinho e fica invisível pros outros. Nesse caso o jogo mostra "Modo solo" no topo da tela.
 
-Abrindo o `index.html` direto, ou por outro site como o GitHub Pages, o jogo roda só no modo single-player.
+### No GitHub Pages (ou abrindo o `index.html`)
+
+Um jogador cria o mundo e vira o anfitrião; os outros entram com o código dele.
+
+1. Clique em **Online** no topo da tela (ou em **Jogar online com amigos** na tela de título).
+2. Digite o nome do personagem e clique em **Criar mundo**. Aparece um código de 5 letras.
+3. Passe o código ou o link (**Copiar link**) pros amigos. Eles digitam o próprio nome e o código e clicam em **Entrar**.
+
+O progresso fica salvo pelo nome do personagem:
+
+- O anfitrião guarda o save de todo mundo no navegador dele. Quem entra de novo com o mesmo nome recebe o progresso de volta.
+- Cada jogador também guarda uma cópia por nome no próprio navegador. Ao entrar no mundo de outro anfitrião, vale a cópia mais nova.
+- Não tem senha: quem souber o nome pode jogar com aquele personagem.
+- Não dá pra salvar pelo IP: o navegador não tem acesso a ele, e o IP muda e é dividido entre várias pessoas.
+
+O mundo fica aberto enquanto o anfitrião estiver com o jogo aberto, e cabem até 8 jogadores. A conexão usa o [PeerJS](https://peerjs.com/): o servidor público dele só apresenta os navegadores, e depois eles conversam direto. Em algumas redes mais fechadas (alguns 4G e redes de empresa) essa conexão direta pode falhar.
+
+Cada jogador continua com o próprio mundo de animais selvagens. O que é compartilhado são os treinadores, os animais que acompanham cada um e os duelos.
 
 ### Testar o multiplayer localmente
 
@@ -144,6 +166,8 @@ powershell -ExecutionPolicy Bypass -File dev/serve.ps1
 ```
 
 Depois abra `http://localhost:8765/mp` em duas abas. Para o single-player, use `http://localhost:8765/`.
+
+O online do GitHub dá pra testar abrindo `http://localhost:8765/` em duas abas: uma cria o mundo e a outra entra com o código.
 
 As duas abas dividem o mesmo save do navegador.
 
