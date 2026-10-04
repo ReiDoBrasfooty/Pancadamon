@@ -1,5 +1,9 @@
 # Pancadamon
 
+## [▶ Jogar agora](https://reidobrasfooty.github.io/Pancadamon/)
+
+Abre direto no navegador, no computador ou no celular. Pra jogar com amigos, clique em **Online** dentro do jogo.
+
 Um jogo estilo Pokémon em 3D isométrico, só que os animais têm física de boneco molenga (ragdoll), como em Gang Beasts e Human Fall Flat. As batalhas são em tempo real: você soca, morde, agarra e arremessa o inimigo, e depois tenta capturá-lo com uma bolota.
 
 Feito em um único arquivo HTML com [three.js](https://threejs.org/) (r128) para os gráficos e [cannon.js](https://schteppe.github.io/cannon.js/) (0.6.2) para a física, ambos carregados do cdnjs.
