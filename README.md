@@ -153,7 +153,16 @@ O progresso fica salvo pelo nome do personagem:
 - Não tem senha: quem souber o nome pode jogar com aquele personagem.
 - Não dá pra salvar pelo IP: o navegador não tem acesso a ele, e o IP muda e é dividido entre várias pessoas.
 
-O mundo fica aberto enquanto o anfitrião estiver com o jogo aberto, e cabem até 8 jogadores. A conexão usa o [PeerJS](https://peerjs.com/): o servidor público dele só apresenta os navegadores, e depois eles conversam direto. Em algumas redes mais fechadas (alguns 4G e redes de empresa) essa conexão direta pode falhar.
+O mundo fica aberto enquanto o anfitrião estiver com o jogo aberto, e cabem até 8 jogadores.
+
+A conexão tem dois caminhos, e o anfitrião aceita os dois ao mesmo tempo:
+
+- **Direta** ([PeerJS](https://peerjs.com/)): o servidor público dele só apresenta os navegadores, e depois eles conversam direto. Tem menos atraso, mas falha em redes que não aceitam conexão de entrada (CGNAT, alguns 4G, redes de empresa).
+- **Retransmitida** (servidores MQTT públicos: EMQX, HiveMQ e Mosquitto): tudo passa por um servidor, e os dois lados só fazem conexões de saída. Por isso funciona nos dois sentidos em qualquer rede que abre sites, com uns 400 ms de atraso.
+
+Quem entra tenta primeiro o caminho que funcionou da última vez e, se não der, passa pro outro sozinho. O menu Online mostra qual caminho cada um está usando.
+
+Nos duelos, quem desafia é quem roda a luta. Se a sua conexão for a retransmitida, prefira desafiar em vez de aceitar: assim o seu animal responde na hora.
 
 Cada jogador continua com o próprio mundo de animais selvagens. O que é compartilhado são os treinadores, os animais que acompanham cada um e os duelos.
 

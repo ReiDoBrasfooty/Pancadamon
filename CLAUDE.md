@@ -117,7 +117,14 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
   - The guest renders the fight with puppets.
 - `window.claude.use('room')` resolves `null` outside claude.ai. Every net path must degrade to single-player.
 - **Online outside claude.ai (`pnet`, GitHub Pages):** when `IN_CLAUDE` is false, the **Online** menu (`showOnline`) lets one player host and others join with a 5-character code (`?sala=CODE` opens it prefilled).
-  - It lazy-loads PeerJS from cdnjs. The host relays every message, and `peerView(room).api` imitates the `room` capability (`presence`, `peers`, `onPeers`, `join`, `leave`). `goOnline` sets `net.room`/`net.user` to these shims, so the lobby and duel code above runs unchanged.
+  - There are two transports, and the host listens on both:
+    - **Direct:** PeerJS/WebRTC, lazy-loaded from cdnjs.
+    - **Relayed:** public MQTT brokers in `RELAYS` (mqtt.js from cdnjs). Topics are `pancadamon/v1/CODE/h` (to host, `{f: guestId, m}`), `.../g/ID` (to one guest) and `.../x` (host last-will `bye`).
+    - `makeLink` wraps an MQTT pair in the PeerJS DataConnection shape, so `hostAccept` treats both alike.
+    - Guests try the transport stored in `VIA_KEY` first, then the other. Each attempt is a `handshake` (hello → hi/no).
+    - `hello.sid` lets the host replace a stale session of the same player that arrived by the other transport.
+    - Some users are behind CGNAT, so never ship an online feature that only works peer-to-peer.
+  - The host relays every message, and `peerView(room).api` imitates the `room` capability (`presence`, `peers`, `onPeers`, `join`, `leave`). `goOnline` sets `net.room`/`net.user` to these shims, so the lobby and duel code above runs unchanged.
   - Peer ids are `h` (host) and `p1`, `p2`… The host keeps the authoritative `pnet.rooms`. Each tab mirrors the rooms it is in through `pnet.views`, updated by `up`/`gone` messages.
   - Saves are keyed by character name: the host stores everyone's in `localStorage` under `pancadamon_online_saves`, and each browser keeps a per-name copy under `pancadamon_char_<name>`. `pickSave` takes the newer copy using `game.at`, which `save()` stamps.
   - Every save from another machine goes through `fixSave`/`cleanMember`, which validate species and numbers and strip HTML from nicknames. `load()` uses the same path. Check species with `isSpecies`, never `SPECIES[x]`, because remote strings like `constructor` hit `Object.prototype`.

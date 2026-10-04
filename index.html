@@ -3732,27 +3732,60 @@ function soloNote(){
 })();
 
 /* ---------- Online fora do claude.ai (GitHub Pages) ----------
-   Quem cria o mundo é o anfitrião: tudo passa por ele (o PeerJS só apresenta os navegadores, depois a conexão é direta)
-   e ele guarda o save de cada jogador pelo nome do personagem. Cada um também guarda uma cópia por nome no próprio navegador.
+   Quem cria o mundo é o anfitrião: tudo passa por ele, e ele guarda o save de cada jogador pelo nome do personagem.
+   Cada um também guarda uma cópia por nome no próprio navegador.
+   Dois caminhos até o anfitrião, e o anfitrião escuta nos dois:
+   - direto: PeerJS (WebRTC). O servidor só apresenta os navegadores; menos atraso nos duelos, mas falha em redes que
+     não aceitam conexão de entrada (CGNAT, alguns 4G).
+   - retransmitido: servidores MQTT públicos por WebSocket. Os dois lados só fazem conexões de saída, então funciona nas
+     duas direções em qualquer rede que abre sites. Tópicos: pancadamon/v1/CÓDIGO/h (pro anfitrião, com {f: id do convidado, m}),
+     .../g/ID (pra um convidado) e .../x (aviso de que o anfitrião caiu).
+   O convidado tenta primeiro o caminho que funcionou da última vez (VIA_KEY) e cai pro outro se não der.
    A sala imita a capability room do claude.ai (presence, peers, onPeers, join, leave), então o lobby e os duelos não mudam.
    Mensagens: convidado -> anfitrião {hello, pres, join, leave, save}; anfitrião -> convidado {hi, no, up, gone, bye}. */
 const IN_CLAUDE = !!(window.claude && window.claude.use);
-const PEER_PREFIX = 'pancadamon-v1-', NET_VER = 1, ONLINE_MAX = 8;
-const ONLINE_SAVES = 'pancadamon_online_saves', CHAR_PREFIX = 'pancadamon_char_', NAME_KEY = 'pancadamon_nome';
+const PEER_PREFIX = 'pancadamon-v1-', TOPIC_PREFIX = 'pancadamon/v1/', NET_VER = 1, ONLINE_MAX = 8;
+const ONLINE_SAVES = 'pancadamon_online_saves', CHAR_PREFIX = 'pancadamon_char_', NAME_KEY = 'pancadamon_nome', VIA_KEY = 'pancadamon_via';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const RELAYS = ['wss://broker.emqx.io:8084/mqtt', 'wss://broker.hivemq.com:8884/mqtt', 'wss://test.mosquitto.org:8081/mqtt'];
 // status: off | connecting | host | guest; rooms (só no anfitrião): sala -> peer -> {by, p, at}; views: o que esta aba enxerga de cada sala
-const pnet = {status:'off', host:false, peer:null, conn:null, code:'', me:'', name:'', views:new Map(), rooms:new Map(), clients:new Map(), seq:0, saveT:null, msg:''};
+// via: 'direta' ou 'retransmitida' (convidado); ends: o que fechar ao sair; attempt invalida tentativas antigas
+const pnet = {status:'off', host:false, conn:null, code:'', me:'', name:'', via:'', views:new Map(), rooms:new Map(), clients:new Map(), seq:0, saveT:null, msg:'', ends:[], attempt:0};
 function cleanName(s){ return String(s ?? '').replace(/[\u0000-\u001f\u007f<>&"'`]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16); }
 const nameKey = n => n.toLowerCase();
 const readJson = k => { try { return JSON.parse(localStorage.getItem(k)); } catch(e){ return null; } };
+const randId = (n, chars='abcdefghijkmnpqrstuvwxyz23456789') => Array.from({length:n}, () => chars[Math.floor(Math.random()*chars.length)]).join('');
 const peerUser = Object.freeze({profiles:async ids => Object.fromEntries([].concat(ids).map(id => [id, {id, name:String(id)}]))});
-function loadPeerJs(){
-  if (window.Peer) return Promise.resolve();
+function loadLib(global, src){
+  if (window[global]) return Promise.resolve();
   return new Promise((ok, bad) => {
-    const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js';
-    s.onload = ok; s.onerror = () => bad(new Error('peerjs')); document.head.appendChild(s);
+    const s = document.createElement('script'); s.src = src;
+    s.onload = () => window[global] ? ok() : bad(new Error(global)); s.onerror = () => bad(new Error(global)); document.head.appendChild(s);
   });
 }
+const loadPeerJs = () => loadLib('Peer', 'https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.5/peerjs.min.js');
+const loadMqtt = () => loadLib('mqtt', 'https://cdnjs.cloudflare.com/ajax/libs/mqtt/5.16.0/mqtt.min.js');
+// conexão retransmitida com a mesma cara da DataConnection do PeerJS (on, send, close, open)
+function makeLink(sendFn, closeFn, via){
+  const h = {data:[], close:[], error:[]};
+  const l = {open:true, via,
+    on(ev, f){ (h[ev] || (h[ev] = [])).push(f); return l; },
+    send(m){ if (l.open) sendFn(m); },
+    close(){ if (!l.open) return; l.open = false; try { closeFn(); } catch(e){} for (const f of h.close) f(); },
+    deliver(m){ if (l.open) for (const f of h.data) f(m); }};
+  return l;
+}
+// conecta num servidor MQTT; resolve com o cliente ou falha em até 7 s
+function relayConnect(url, will){
+  return new Promise((ok, bad) => {
+    let c;
+    try { c = mqtt.connect(url, {keepalive:10, reconnectPeriod:0, connectTimeout:7000, clean:true, will}); } catch(e){ bad(e); return; }
+    c.once('connect', () => ok(c));
+    c.once('error', e => { try { c.end(true); } catch(x){} bad(e); });
+    c.once('close', () => bad(new Error('close')));
+  });
+}
+const relayParse = buf => { try { return JSON.parse(buf.toString()); } catch(e){ return null; } };
 
 // o que esta aba enxerga de uma sala, com a mesma cara da capability room
 function peerView(room){
@@ -3855,7 +3888,7 @@ function pickSave(name, local){
   return g || null;
 }
 function hostAccept(conn){
-  const c = {id:'p' + (++pnet.seq), conn, ready:false, name:''};
+  const c = {id:'p' + (++pnet.seq), conn, ready:false, name:'', sid:'', via:conn.via || 'direta'};
   pnet.clients.set(c.id, c);
   conn.on('data', m => hostOnData(c, m));
   conn.on('close', () => hostDrop(c));
@@ -3873,21 +3906,24 @@ function hostOnData(c, m){
 }
 function hostHello(c, m){
   const no = msg => { try { c.conn.send({t:'no', msg}); } catch(e){} setTimeout(() => c.conn.close(), 600); };
-  const name = cleanName(m.name), others = [...pnet.clients.values()].filter(o => o.ready);
+  const name = cleanName(m.name), sid = String(m.sid || '').slice(0, 16);
   if (m.v !== NET_VER) return no('Sua versão do jogo é diferente da do anfitrião. Recarreguem a página.');
   if (!name) return no('Escolha um nome pro personagem.');
+  // a mesma pessoa chegando por outro caminho (a tentativa direta demorou e ela veio pela retransmissão): fica a nova
+  for (const o of [...pnet.clients.values()]) if (o !== c && o.ready && sid && o.sid === sid && nameKey(o.name) === nameKey(name)){ hostDrop(o, true); o.conn.close(); }
+  const others = [...pnet.clients.values()].filter(o => o.ready && o !== c);
   if (nameKey(name) === nameKey(pnet.name) || others.some(o => nameKey(o.name) === nameKey(name))) return no(`Já tem alguém jogando como ${name} neste mundo.`);
   if (others.length >= ONLINE_MAX - 1) return no(`Este mundo está cheio (${ONLINE_MAX} jogadores).`);
-  c.ready = true; c.name = name;
+  c.ready = true; c.name = name; c.sid = sid;
   c.conn.send({t:'hi', id:c.id, code:pnet.code, game:pickSave(name, m.local)});
   hostJoin(c.id, '');
   toast(`${name} entrou no mundo.`);
   refreshOnline();
 }
-function hostDrop(c){
+function hostDrop(c, quiet){
   if (!pnet.clients.delete(c.id)) return;
   for (const room of [...pnet.rooms.keys()]) hostLeave(c.id, room);
-  if (c.ready) toast(`${c.name} saiu do mundo.`);
+  if (c.ready && !quiet) toast(`${c.name} saiu do mundo.`);
   refreshOnline();
 }
 
@@ -3912,69 +3948,172 @@ function localFor(name){
   return main && (!main.name || nameKey(main.name) === nameKey(name)) ? main : null;
 }
 function onlineFail(msg){ pnet.msg = msg; onlineStop(msg); }
-async function onlineStart(asHost, name, code){
+const stillTrying = a => pnet.attempt === a && pnet.status === 'connecting';
+function onlineStart(asHost, name, code){
   if (pnet.status !== 'off') return;
-  pnet.status = 'connecting'; pnet.host = asHost; pnet.name = name; pnet.msg = asHost ? 'Criando o mundo...' : 'Conectando...';
+  const a = ++pnet.attempt;
+  Object.assign(pnet, {status:'connecting', host:asHost, name, code:asHost ? '' : code, via:'', ends:[], msg:asHost ? 'Criando o mundo...' : 'Conectando...'});
   refreshOnline();
-  try { await loadPeerJs(); } catch(e){ onlineFail('Não deu pra carregar a conexão online. Confira a internet.'); return; }
-  const timer = setTimeout(() => { if (pnet.status === 'connecting') onlineFail(asHost ? 'O servidor de salas não respondeu. Tente de novo.' : 'Não deu pra conectar. Confira o código e se o anfitrião está com o jogo aberto.'); }, 15000);
-  if (asHost){
-    const open = tries => {
-      const c = Array.from({length:5}, () => CODE_CHARS[Math.floor(Math.random()*CODE_CHARS.length)]).join('');
-      const peer = new Peer(PEER_PREFIX + c, {debug:0}); pnet.peer = peer;
-      peer.on('open', () => {
-        if (pnet.peer !== peer) return;
-        clearTimeout(timer); pnet.code = c; pnet.me = 'h'; pnet.status = 'host';
-        goOnline(); adoptOnline(pickSave(name, localFor(name)));
-      });
-      peer.on('connection', conn => { if (pnet.status === 'host') hostAccept(conn); else conn.close(); });
-      // caiu só o servidor de salas: quem já está dentro continua conectado, então tenta voltar
-      peer.on('disconnected', () => { if (pnet.peer === peer && pnet.status === 'host') setTimeout(() => { if (pnet.peer === peer && !peer.destroyed) peer.reconnect(); }, 2000); });
-      peer.on('error', e => {
-        if (pnet.peer !== peer || pnet.status !== 'connecting') return;
-        if (e.type === 'unavailable-id' && tries < 3){ peer.destroy(); open(tries + 1); }
-        else { clearTimeout(timer); onlineFail('Não deu pra criar o mundo agora. Tente de novo.'); }
-      });
-    };
-    open(0);
-    return;
+  (asHost ? hostStart(a, name) : guestStart(a, name, code)).catch(() => { if (stillTrying(a)) onlineFail('Não deu pra conectar. Confira a internet e tente de novo.'); });
+}
+function connecting(a, msg){ if (stillTrying(a)){ pnet.msg = msg; refreshOnline(); } }
+
+/* anfitrião: abre os dois caminhos ao mesmo tempo; basta um funcionar */
+async function hostStart(a, name){
+  const code = randId(5, CODE_CHARS);
+  const [direct, relays] = await Promise.all([hostDirect(a, code), hostRelays(a, code)]);
+  if (!stillTrying(a)){ if (direct) direct.destroy(); for (const c of relays) c.end(true); return; }
+  if (!direct && !relays.length){ onlineFail('Não deu pra criar o mundo: nenhum servidor respondeu. Confira a internet.'); return; }
+  if (direct) pnet.ends.push(() => direct.destroy());
+  for (const c of relays) pnet.ends.push(() => c.end(false));
+  Object.assign(pnet, {code, me:'h', status:'host', via:[direct && 'direta', relays.length && 'retransmitida'].filter(Boolean).join(' e ')});
+  goOnline(); adoptOnline(pickSave(name, localFor(name)));
+}
+function hostDirect(a, code){
+  return loadPeerJs().then(() => new Promise(res => {
+    const peer = new Peer(PEER_PREFIX + code, {debug:0});
+    let done = false;
+    const end = ok => { if (done) return; done = true; clearTimeout(t); if (!ok) try { peer.destroy(); } catch(e){} res(ok ? peer : null); };
+    const t = setTimeout(() => end(false), 9000);
+    peer.on('open', () => end(true));
+    peer.on('error', () => { if (!done) end(false); });
+    peer.on('connection', conn => { if (pnet.status === 'host' && pnet.attempt === a) hostAccept(conn); else conn.close(); });
+    // caiu só o servidor de apresentação: quem já está dentro continua conectado, então tenta voltar
+    peer.on('disconnected', () => { if (pnet.status === 'host' && pnet.attempt === a) setTimeout(() => { if (!peer.destroyed) peer.reconnect(); }, 2000); });
+  }), () => null);
+}
+async function hostRelays(a, code){
+  try { await loadMqtt(); } catch(e){ return []; }
+  const base = TOPIC_PREFIX + code + '/';
+  const got = await Promise.allSettled(RELAYS.map(u => relayConnect(u, {topic:base + 'x', payload:'bye', qos:0, retain:false})));
+  const clients = got.filter(r => r.status === 'fulfilled').map(r => r.value);
+  for (const c of clients){
+    const links = new Map();   // id do convidado -> conexão
+    c.subscribe(base + 'h');
+    c.on('message', (topic, buf) => {
+      const w = relayParse(buf);
+      if (!w || typeof w.f !== 'string' || !/^[a-z0-9]{8,16}$/.test(w.f) || !w.m || typeof w.m !== 'object') return;
+      let l = links.get(w.f);
+      if (w.m.t === '_close'){ if (l) l.close(); return; }
+      if (!l){
+        if (w.m.t !== 'hello' || pnet.status !== 'host' || pnet.attempt !== a) return;
+        l = makeLink(m => c.publish(base + 'g/' + w.f, JSON.stringify(m)), () => links.delete(w.f), 'retransmitida');
+        links.set(w.f, l); hostAccept(l);
+      }
+      l.deliver(w.m);
+    });
+    c.on('close', () => { for (const l of [...links.values()]) l.close(); });
   }
-  pnet.code = code;
-  const peer = new Peer({debug:0}); pnet.peer = peer;
-  peer.on('error', e => {
-    if (pnet.peer !== peer || pnet.status !== 'connecting') return;
-    clearTimeout(timer); onlineFail(e.type === 'peer-unavailable' ? `Não achei nenhum mundo com o código ${code}.` : 'Não deu pra conectar ao servidor de salas.');
-  });
-  peer.on('open', () => {
-    if (pnet.peer !== peer) return;
-    const conn = peer.connect(PEER_PREFIX + code, {reliable:true, serialization:'json'}); pnet.conn = conn;
-    conn.on('open', () => conn.send({t:'hello', v:NET_VER, name, local:localFor(name)}));
-    conn.on('data', m => guestOnData(m, timer));
-    conn.on('close', () => { if (pnet.conn !== conn) return; if (pnet.status === 'guest') onlineStop('A conexão com o anfitrião caiu.'); else if (pnet.status === 'connecting'){ clearTimeout(timer); onlineFail(pnet.msg || 'O anfitrião recusou a conexão.'); } });
+  return clients;
+}
+
+/* convidado: tenta o caminho que deu certo da última vez e, se não der, o outro */
+async function guestStart(a, name, code){
+  const sid = randId(10);
+  const order = readJson(VIA_KEY) === 'retransmitida' ? ['retransmitida', 'direta'] : ['direta', 'retransmitida'];
+  for (const via of order){
+    if (!stillTrying(a)) return;
+    connecting(a, via === 'direta' ? 'Tentando conexão direta...' : 'Conectando pelo servidor de retransmissão...');
+    const r = via === 'direta' ? await guestDirect(a, name, code, sid) : await guestRelay(a, name, code, sid);
+    if (!stillTrying(a)){ if (r && r.link) r.link.close(); return; }
+    if (r && r.no){ onlineFail(r.no); return; }
+    if (r && r.hi){
+      try { localStorage.setItem(VIA_KEY, JSON.stringify(via)); } catch(e){}
+      const link = r.link;
+      Object.assign(pnet, {conn:link, via, me:String(r.hi.id).slice(0, 12), status:'guest'});
+      pnet.ends.push(() => link.close());
+      link.on('data', m => { if (pnet.conn === link) guestOnData(m); });
+      link.on('close', () => { if (pnet.conn === link && pnet.status === 'guest') onlineStop('A conexão com o anfitrião caiu.'); });
+      goOnline();
+      const q = r.queue; r.queue = null;
+      for (const m of q) guestOnData(m);
+      adoptOnline(r.hi.game);
+      return;
+    }
+  }
+  if (stillTrying(a)) onlineFail(`Não achei nenhum mundo com o código ${code}. Confira o código e se o anfitrião está com o jogo aberto.`);
+}
+// manda o hello por uma conexão aberta e espera o "hi" (ou o "não") do anfitrião
+function handshake(link, name, sid, ms){
+  return new Promise(res => {
+    let done = false, got = null;
+    const end = r => { if (done) return; done = true; clearTimeout(t); res(r); };
+    const t = setTimeout(() => end(null), ms);
+    link.on('data', m => {
+      if (!m || typeof m !== 'object') return;
+      // o que chega logo depois do "hi" (a sala inteira) fica guardado até o jogo ouvir a conexão
+      if (done){ if (got && got.queue) got.queue.push(m); return; }
+      if (m.t === 'hi') end(got = {hi:m, link, queue:[]});
+      else if (m.t === 'no') end({no:String(m.msg).slice(0, 140)});
+    });
+    link.on('close', () => end(null));
+    link.send({t:'hello', v:NET_VER, name, sid, local:localFor(name)});
   });
 }
-function guestOnData(m, timer){
-  if (!m || typeof m !== 'object') return;
-  if (m.t === 'no' && pnet.status === 'connecting'){ clearTimeout(timer); pnet.msg = String(m.msg).slice(0, 140); return; }
-  if (m.t === 'hi' && pnet.status === 'connecting'){
-    clearTimeout(timer); pnet.me = String(m.id).slice(0, 12); pnet.status = 'guest';
-    goOnline(); adoptOnline(m.game);
-    return;
+async function guestDirect(a, name, code, sid){
+  try { await loadPeerJs(); } catch(e){ return null; }
+  const conn = await new Promise(res => {
+    const peer = new Peer({debug:0});
+    let done = false;
+    const end = c => { if (done) return; done = true; clearTimeout(t); if (!c) try { peer.destroy(); } catch(e){} res(c); };
+    // ICE que não fecha (rede que não aceita entrada) só desiste sozinho bem depois: corta em 9 s
+    const t = setTimeout(() => end(null), 9000);
+    peer.on('error', () => end(null));
+    peer.on('open', () => {
+      if (!stillTrying(a)){ end(null); return; }
+      const c = peer.connect(PEER_PREFIX + code, {reliable:true, serialization:'json'});
+      c.on('open', () => { c.peerObj = peer; c.on('close', () => { try { peer.destroy(); } catch(e){} }); end(c); });
+      c.on('error', () => end(null));
+    });
+  });
+  if (!conn) return null;
+  const r = await handshake(conn, name, sid, 8000);
+  if (!r || r.no){ conn.close(); try { conn.peerObj.destroy(); } catch(e){} }
+  return r;
+}
+async function guestRelay(a, name, code, sid){
+  try { await loadMqtt(); } catch(e){ return null; }
+  const base = TOPIC_PREFIX + code + '/', gid = randId(12);
+  for (const url of RELAYS){
+    if (!stillTrying(a)) return null;
+    let c;
+    try { c = await relayConnect(url, {topic:base + 'h', payload:JSON.stringify({f:gid, m:{t:'_close'}}), qos:0, retain:false}); } catch(e){ continue; }
+    const link = makeLink(m => c.publish(base + 'h', JSON.stringify({f:gid, m})), () => {
+      if (c.connected) c.publish(base + 'h', JSON.stringify({f:gid, m:{t:'_close'}}));
+      setTimeout(() => c.end(false), 200);
+    }, 'retransmitida');
+    c.subscribe([base + 'g/' + gid, base + 'x']);
+    c.on('message', (topic, buf) => {
+      if (topic === base + 'x'){ if (buf.toString() === 'bye') link.deliver({t:'bye'}); return; }
+      const m = relayParse(buf); if (m && typeof m === 'object') link.deliver(m);
+    });
+    c.on('close', () => link.close());
+    // o anfitrião escuta em todos os servidores que conseguiu; se ele não está neste, tenta o próximo
+    const r = await handshake(link, name, sid, 7000);
+    if (r && r.hi) return r;
+    link.close();
+    if (r && r.no) return r;
   }
-  if (m.t === 'bye' && pnet.status === 'guest'){ onlineStop('O anfitrião fechou o mundo.'); return; }
-  if (pnet.status !== 'guest' || typeof m.room !== 'string' || typeof m.peer !== 'string') return;
+  return null;
+}
+function guestOnData(m){
+  if (!m || typeof m !== 'object' || pnet.status !== 'guest') return;
+  if (m.t === 'bye'){ onlineStop('O anfitrião fechou o mundo.'); return; }
+  if (typeof m.room !== 'string' || typeof m.peer !== 'string') return;
   if (m.t === 'up' && m.p && typeof m.p === 'object') applyNet({t:'up', room:m.room, peer:m.peer.slice(0, 12), by:cleanName(m.by) || 'Treinador', p:m.p});
   else if (m.t === 'gone') applyNet({t:'gone', room:m.room, peer:m.peer});
 }
 function onlineStop(msg){
-  const peer = pnet.peer;
+  const ends = pnet.ends;
   if (pnet.status === 'guest' && pnet.saveT){ clearTimeout(pnet.saveT); pnet.saveT = null; netSend({t:'save', game}); }
   if (pnet.status === 'host') for (const c of pnet.clients.values()) if (c.conn.open) try { c.conn.send({t:'bye'}); } catch(e){}
   for (const v of pnet.views.values()) clearTimeout(v.sendT);
-  Object.assign(pnet, {status:'off', host:false, peer:null, conn:null, code:'', me:''});
+  const conns = [...pnet.clients.values()].map(c => c.conn);
+  Object.assign(pnet, {status:'off', host:false, conn:null, code:'', me:'', via:'', ends:[]});
+  pnet.attempt++;
   pnet.views.clear(); pnet.rooms.clear(); pnet.clients.clear();
-  // dá tempo do último save chegar no anfitrião antes de fechar
-  if (peer) setTimeout(() => { try { peer.destroy(); } catch(e){} }, 300);
+  // dá tempo do último save e do "tchau" chegarem antes de fechar
+  setTimeout(() => { for (const c of conns) try { c.close(); } catch(e){} for (const f of ends) try { f(); } catch(e){} }, 300);
   if (net.duel) finishDuel(null);
   net.room = null; net.user = null; net.challenge = net.accept = net.decline = null;
   for (const r of [...net.remotes.values()]) removeRemote(r);
@@ -3994,7 +4133,8 @@ function onlineSaved(){
 /* --- menu Online --- */
 function onlinePlayers(){
   const v = pnet.views.get('');
-  return v ? [...v.map].map(([peer, e]) => e.by + (peer === pnet.me ? ' (você)' : peer === 'h' ? ' (anfitrião)' : '')) : [];
+  const tag = peer => peer === pnet.me ? ' (você)' : peer === 'h' ? ' (anfitrião)' : pnet.clients.has(peer) ? ` (conexão ${pnet.clients.get(peer).via})` : '';
+  return v ? [...v.map].map(([peer, e]) => e.by + tag(peer)) : [];
 }
 function showOnline(){
   if (IN_CLAUDE) return;
@@ -4012,6 +4152,7 @@ function showOnline(){
     body = `<p class="hint">${st === 'host' ? 'Você é o anfitrião. Passe o código ou o link pros amigos:' : 'Você está no mundo:'}</p>
       <div class="code" id="onShow"></div>
       <div class="actions">${st === 'host' ? '<button class="primary" id="onCopy">Copiar link</button>' : ''}<button id="onLeave">${st === 'host' ? 'Fechar o mundo' : 'Sair do mundo'}</button><button id="onBack">Voltar</button></div>
+      <p class="small" id="onVia"></p>
       <div class="sect">Jogadores</div><ul class="players" id="onList"></ul>
       ${st === 'host' ? '<p class="small">Se você fechar a página, o mundo fecha pra todo mundo. O progresso de cada um fica salvo aqui pelo nome.</p>' : ''}`;
   }
@@ -4036,6 +4177,7 @@ function showOnline(){
     if (!busy) (nm.value ? cd : nm).focus();
   } else {
     $('onShow').textContent = pnet.code;
+    $('onVia').textContent = pnet.status === 'host' ? `Aceitando conexão ${pnet.via}.` : `Conexão ${pnet.via}${pnet.via === 'retransmitida' ? ' (passa por um servidor; funciona em qualquer rede, com um pouco mais de atraso)' : ''}.`;
     for (const n of onlinePlayers()){ const li = document.createElement('li'); li.textContent = n; $('onList').appendChild(li); }
     $('onLeave').onclick = () => onlineStop(pnet.status === 'host' ? 'Você fechou o mundo.' : 'Você saiu do mundo.');
     if ($('onCopy')) $('onCopy').onclick = () => {
