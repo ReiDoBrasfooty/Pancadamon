@@ -74,6 +74,10 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
   - KO and fainted states simply skip control, so the body goes limp.
 - `fixJoints()` runs right after `world.step`: it snaps any part that drifted more than `JOINT_SLACK` from its joint back onto it, so limbs never visibly detach.
 - Bipeds strike and grab with their arms; quadrupeds bite and grab with their head. The code uses `c.strikers` / `c.grabbers` and each part's `body.tip` for this.
+  - Input per hand: `punchL`/`punchR` (one-frame tap) and `holdL`/`holdR` (held); `handInput()` builds them from the keys. The AI still sends the old `punch` (alternates hands) and `grab` (both hands). `c.grabHand[i]` says which hand is grabbing, `releaseGrabs(c, fling, arm)` lets go of one hand, and only `c.arms[c.punchArm]` does damage (see `dangerous`).
+  - Aiming: `strikePitch` gives `c.aim`, which tilts punches, grabs and bites toward the nearest part of the opponent. Bipeds lean and crouch (`c.crouch`) to reach short animals, and `c.inward` closes wide arms toward the center line.
+  - `nearMisses()` runs after `processHits()`: while attacking, a striker tip within a small margin of the opponent counts as a hit (at most once per blow, `c.landed`), even without a physics contact.
+  - Duels send `pl`/`pr` press counters and `gl`/`gr` held flags; the host falls back to `pj`/`g` for an old guest.
 
 **Hits and grabs:**
 - cannon `collide` events only push onto `hitQueue`. `processHits()` handles them **after** `world.step`. Never add or remove bodies or constraints inside a cannon event.
@@ -133,7 +137,7 @@ All player-facing text and code comments are Brazilian Portuguese; keep them tha
 ## Conventions
 
 - **Controls stay around WASD:**
-  - Battle: Q / click attack, E (hold) grab, Space jump/lift, F special, R / right-click throw capture item, C cycle capture item, X flee/forfeit.
+  - Battle: Q / click = left hand, E = right hand (tap punches, hold longer than `HOLD_GRAB` grabs with that hand; quadrupeds bite with either), Space jump/lift, F special, R / right-click throw capture item, C cycle capture item, X flee/forfeit.
   - Menus and map: Z bag, Tab team, 1–5 switch animal, E interact.
   - Duels: F challenge, E accept, X decline.
   - When you change a key, update the help text in `setHud`, the title screen list, the touch buttons (`data-k`) and the README.

@@ -4,9 +4,18 @@
 
 Abre direto no navegador, no computador ou no celular. Pra jogar com amigos, clique em **Online** dentro do jogo.
 
-Um jogo estilo Pokémon em 3D isométrico, só que os animais têm física de boneco molenga (ragdoll), como em Gang Beasts e Human Fall Flat. As batalhas são em tempo real: você soca, morde, agarra e arremessa o inimigo, e depois tenta capturá-lo com uma bolota.
+Um jogo estilo Pokémon em 3D isométrico, só que os animais têm física de boneco molenga (ragdoll), com visual macio e movimentos pesados inspirados em Party Animals. As batalhas são em tempo real: você soca, morde, agarra e arremessa o inimigo, e depois tenta capturá-lo com uma bolota.
+
+O acabamento padrão é **pelúcia**: materiais foscos, iluminação contínua, formas arredondadas e sombras de contato discretas. Os animais aceleram e freiam gradualmente, balançam o tronco nas passadas, deixam a cabeça acompanhar com atraso e amortecem a aterrissagem. Os estilos anteriores continuam disponíveis pela URL, por exemplo `?estilo=anime` ou `?estilo=diorama`; `?estilo=pelucia` escolhe o novo acabamento.
 
 Feito em um único arquivo HTML com [three.js](https://threejs.org/) (r128) para os gráficos e [cannon.js](https://schteppe.github.io/cannon.js/) (0.6.2) para a física, ambos carregados do cdnjs.
+
+## Melhorias de combate e aprendizado
+
+- Sons sintetizados diferentes para socos, mordidas, golpes na cabeça e especiais; o botão Som liga ou desliga e lembra a preferência.
+- Indicadores de agarrão, atordoamento e preparação do especial durante batalhas selvagens.
+- Inimigos de Força pressionam e agarram mais; os de Agilidade circulam mais; usuários de pedrada e hipnose procuram distância. Especiais têm aviso e uma breve recuperação.
+- Novos personagens recebem um tutorial de cinco etapas: andar, acertar, agarrar, arremessar e capturar. O progresso é salvo; concluir rende 100 moedas e 3 bolotas. É possível pular sem recompensa. Saves antigos não são obrigados a fazê-lo.
 
 ## Como jogar
 
@@ -21,9 +30,9 @@ Todos os comandos ficam em volta do WASD, na mão esquerda.
 | Tecla | Ação |
 |---|---|
 | `W` `A` `S` `D` | Andar / mover o animal na batalha |
-| `Q` ou clique | Soco (animais de duas patas) ou mordida (quatro patas) |
-| `E` (segurar) | Na batalha: agarrar ou morder e segurar |
-| `Espaço` | Pular; segurando alguém, levanta. Solte `E` para arremessar |
+| `Q` ou clique | Mão esquerda: um toque soca, segurar agarra com ela |
+| `E` | Mão direita: um toque soca, segurar agarra com ela. Dá pra segurar com uma mão e socar com a outra. Quadrúpedes mordem com qualquer uma das duas |
+| `Espaço` | Pular; segurando alguém, levanta. Solte a mão para arremessar |
 | `F` | Golpe especial do animal |
 | `R` ou botão direito | Arremessar o item de captura na mira |
 | `C` | Trocar o item de captura |
@@ -131,6 +140,23 @@ No celular aparecem botões na tela.
   | Cratera Brava | 22–28 | poças de lava, Vulcão Pancadão, Campo de Obsidiana |
 
 - **Matos:** cada mapa tem 4 a 7 áreas de mato alto com níveis diferentes. Cada área mantém 2 animais e repõe quem foi capturado ou derrotado. O jogo lembra em qual mapa você parou.
+
+## Diário, Pancadex e saves
+
+Na **Mochila (Z)**, abra **Diário e Pancadex**:
+
+- Nove missões recompensam exploração dos cinco mapas, vitórias, capturas e espécies descobertas. O botão de resgate libera quando o objetivo é cumprido, e cada recompensa só pode ser recebida uma vez.
+- A Pancadex registra espécies vistas e capturadas e as formas encontradas, com pistas do mapa e do habitat. Animais que já estavam no time ou na caixa entram no registro automaticamente.
+- Selvagens comuns têm chance de 1 em 80 de aparecer com uma auréola dourada. Esses animais raros mantêm os mesmos atributos; a marca acompanha o save e as evoluções.
+- **Exportar save** baixa uma cópia JSON. No modo solo, **Importar save** valida o arquivo e mostra um resumo antes da substituição. Uma cópia anterior fica guardada no navegador e pode ser recuperada pelo botão **Recuperar save anterior**. Arquivos antigos continuam compatíveis.
+
+## Chefes em dupla
+
+Dois jogadores online podem enfrentar o chefe do mapa juntos. Os dois devem estar perto do covil, com aquele chefe ainda disponível no próprio progresso. Abra **Mochila → Chefe em dupla** e convide o amigo; ele aceita com **E** no aviso.
+
+Quem convida simula os três animais; o convidado envia os comandos e recebe as posições. O chefe tem 60% mais PV. Cada jogador controla seu animal, podendo agarrar, socar, levantar, arremessar e usar especiais. Não há dano entre aliados, captura ou troca de animal durante a luta. **X** encerra a tentativa; uma queda de conexão também devolve os jogadores ao mapa. A vitória dá aos dois a chave, moedas e experiência. A conexão usa a sala já existente, tanto direta quanto retransmitida.
+
+Para verificar localmente, `/verify` abre partidas descartáveis com dois jogadores pelo simulador de sala. Os botões controlam a simulação, preparam o encontro e permitem conferir a vitória; os saves reais do navegador ficam isolados.
 
 ## Multiplayer
 
